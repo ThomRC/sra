@@ -234,7 +234,7 @@ if __name__ == '__main__':
     # A FOLDER NAMED WITH THE MODEL WILL BE CREATED
     # INSIDE, A FOLDER WITH THE DATE OF THE TRAINING IS CREATED CONTAINING THE TRAINING DATA AND TRAINED MODEL
     while True:
-        import trainer
+        import trainers.trainer as trainer
         aux = 'train'
         # aux = 'load'
 

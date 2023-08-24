@@ -3,8 +3,8 @@ import typing as tp  # NOQA
 import chainer.functions as F
 from chainer import utils
 from denselinear import DenseLinear
-from bjorck_ortho import bjorck_orthonormalize, get_safe_bjorck_scaling, min_ortho_iter
-from updater_adam import Adam
+from utils.bjorck_ortho import bjorck_orthonormalize, get_safe_bjorck_scaling, min_ortho_iter
+from optimizers.updater_adam import Adam
 
 class BjorckLinear(DenseLinear, Adam):
     def __init__(self, in_size, layer_num, config=None, **kwargs):
