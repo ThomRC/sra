@@ -16,14 +16,12 @@ def normalize(x, axis):
     return norm_x
 
 def mnist_preprocessing(train_data = 60000, test_data = 10000, intvl_data = 2., in_center = 1., tr_idx = None, te_idx = None, norm = False):
-    curr_path, curr_fold = os.path.split(os.path.realpath(__file__))
-    while curr_fold != "vol":
-        prev_path = curr_path
-        curr_path, curr_fold = os.path.split(curr_path)
+    dataset_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
+    while curr_fold != "sra-paper":
+        dataset_dir, curr_fold = os.path.split(curr_path)
 
-    path_name = prev_path
-    in_data_dir = path_name + "/datasets/dataset_MNIST/mnist_preprocessed_data_{}_{}.npy".format(intvl_data,in_center)
-    tgt_data_dir = path_name + "/datasets/dataset_MNIST/mnist_preprocessed_target_{}_{}.npy".format(intvl_data, in_center)
+    in_data_dir = dataset_dir + "/datasets/dataset_MNIST/mnist_preprocessed_data_{}_{}.npy".format(intvl_data,in_center)
+    out_data_dir = dataset_dir + "/datasets/dataset_MNIST/mnist_preprocessed_target_{}_{}.npy".format(intvl_data, in_center)
     if os.path.exists(os.path.dirname(in_data_dir)) == False:
         try:
             original_umask = os.umask(0)
@@ -37,10 +35,10 @@ def mnist_preprocessing(train_data = 60000, test_data = 10000, intvl_data = 2., 
         print(in_data_dir)
         cp.save(in_data_dir, x)
         y = cuda.to_gpu(mnist['target'].astype('int32'))
-        cp.save(tgt_data_dir, y)
+        cp.save(out_data_dir, y)
 
     x = cp.load(in_data_dir)
-    y = cp.load(tgt_data_dir)
+    y = cp.load(out_data_dir)
 
     if norm:
         x = normalize(x, axis = 0)
@@ -56,16 +54,12 @@ def mnist_preprocessing(train_data = 60000, test_data = 10000, intvl_data = 2., 
 
 def cifar10_preprocessing(train_data = 50000, test_data = 10000, intvl_data = 4., in_center = 0., tr_idx = None, norm = False):
     train_data = np.minimum(50000, train_data)
-    # curr_fold = 0
-    # curr_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    curr_path, curr_fold = os.path.split(os.path.realpath(__file__))
-    while curr_fold != "vol":
-        prev_path = curr_path
-        curr_path, curr_fold = os.path.split(curr_path)
+    dataset_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
+    while curr_fold != "sra-paper":
+        dataset_dir, curr_fold = os.path.split(curr_path)
 
-    path_name = prev_path
-    in_data_dir = path_name + "/datasets/dataset_cifar10/cifar10_preprocessed_data_{}_{}.npy".format(intvl_data, in_center)
-    tgt_data_dir = path_name + "/datasets/dataset_cifar10/cifar10_preprocessed_target_{}_{}.npy".format(intvl_data, in_center)
+    in_data_dir = dataset_dir + "/datasets/dataset_cifar10/cifar10_preprocessed_data_{}_{}.npy".format(intvl_data, in_center)
+    out_data_dir = dataset_dir + "/datasets/dataset_cifar10/cifar10_preprocessed_target_{}_{}.npy".format(intvl_data, in_center)
     if os.path.exists(os.path.dirname(in_data_dir)) == False:
         try:
             original_umask = os.umask(0)
@@ -91,10 +85,10 @@ def cifar10_preprocessing(train_data = 50000, test_data = 10000, intvl_data = 4.
         print(in_data_dir)
         cp.save(in_data_dir, x)
         y = labels
-        cp.save(tgt_data_dir, y)
+        cp.save(out_data_dir, y)
     te_idx = cp.asarray(range(50000,60000))
     x = cp.load(in_data_dir)
-    y = cp.load(tgt_data_dir)
+    y = cp.load(out_data_dir)
 
     if norm:
         x = normalize(x, axis = 0)
@@ -111,14 +105,12 @@ def cifar10_preprocessing(train_data = 50000, test_data = 10000, intvl_data = 4.
 
 def cifar100_preprocessing(train_data = 50000, test_data = 10000, intvl_data = 4., in_center = 0., tr_idx = None, norm = False):
     train_data = np.minimum(50000, train_data)
-    curr_path, curr_fold = os.path.split(os.path.realpath(__file__))
-    while curr_fold != "vol":
-        prev_path = curr_path
-        curr_path, curr_fold = os.path.split(curr_path)
+    dataset_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
+    while curr_fold != "sra-paper":
+        dataset_dir, curr_fold = os.path.split(curr_path)
 
-    path_name = prev_path
-    in_data_dir = path_name + "/datasets/dataset_cifar100/cifar100_preprocessed_data_{}_{}.npy".format(intvl_data, in_center)
-    tgt_data_dir = path_name + "/datasets/dataset_cifar100/cifar100_preprocessed_target_{}_{}.npy".format(intvl_data, in_center)
+    in_data_dir = dataset_dir + "/datasets/dataset_cifar100/cifar100_preprocessed_data_{}_{}.npy".format(intvl_data, in_center)
+    out_data_dir = dataset_dir + "/datasets/dataset_cifar100/cifar100_preprocessed_target_{}_{}.npy".format(intvl_data, in_center)
     if os.path.exists(os.path.dirname(in_data_dir)) == False:
         try:
             original_umask = os.umask(0)
@@ -143,10 +135,10 @@ def cifar100_preprocessing(train_data = 50000, test_data = 10000, intvl_data = 4
         print(in_data_dir)
         cp.save(in_data_dir, x)
         y = labels
-        cp.save(tgt_data_dir, y)
+        cp.save(out_data_dir, y)
     te_idx = cp.asarray(range(50000,60000))
     x = cp.load(in_data_dir)
-    y = cp.load(tgt_data_dir)
+    y = cp.load(out_data_dir)
 
     if norm:
         x = normalize(x, axis = 0)

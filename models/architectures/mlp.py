@@ -64,7 +64,9 @@ class FeedForwardNN(chainer.ChainList):
         self.zero_cat_in = False
         self.n_hl = fc_hl
         self.epoch = 0
-        self.n_sim = kwargs['n_sim']
+        self.training_num = kwargs['training_num']
+        self.arch = kwargs['arch']
+        self.gpu = kwargs['gpu']
 
         if kwargs['ortho_ws'] is True:
             from bjorck_linear import BjorckLinear as LinearLink

@@ -3,10 +3,10 @@ import cupy as cp
 import numpy as np
 
 import os
+import glob
 import time
 # Import the class to build the model and train the net
 import stats_func as utils
-
 from multiprocessing import Pool
 
 def linf_attacks(network, x, t):
@@ -93,16 +93,22 @@ def l2_attacks(network, x, t):
     return adv_acc, noise_adv_acc
 
 def gaussian_noise_acc(network, x, t):
+    # CHECK LATER if theres a more efficient way to compute instead of using the for loop for each sample
     if network.dataset == "MNIST":
+        acc_threshold = 0.13
         sd_step = 0.32
     elif network.dataset == "cifar10":
+        acc_threshold = 0.13
+        sd_step = 0.032
+    elif network.dataset == "cifar100":
+        acc_threshold = 0.013
         sd_step = 0.032
 
     noise_acc = []
     samples = 5
     sd = 0
     aux = cp.zeros(samples)
-    while sd == 0 or cp.mean(aux) > 0.11 and sd < 10:
+    while sd == 0 or cp.mean(aux) > acc_threshold and sd < 10:
         sd += sd_step
         aux = cp.zeros(samples)
         for i in range(samples):
@@ -126,7 +132,7 @@ def ssnr_eval_acc(network, x, t):
 
     return noise_acc
 
-def perturbation_eval(network, x, t):
+def perturbation_eval(network, x, t, dest):
     print("### Robustness tests (L2, Linf attacks and Gaussian noise) ###")
 
     adv_acc_linf = []
@@ -148,18 +154,32 @@ def perturbation_eval(network, x, t):
     noise_acc.append(acc)
     ssnr_acc.append(acc)
 
-    aux1 = ssnr_eval_acc(network, x, t)
-    ssnr_acc.extend(aux1)
-    aux1 = gaussian_noise_acc(network, x, t)
-    noise_acc.extend(aux1)
-    aux1, aux2 = linf_attacks(network, x, t)
-    adv_acc_linf.extend(aux1)
-    noise_adv_acc_linf.extend(aux2)
-    aux1, aux2 = l2_attacks(network, x, t)
-    adv_acc_l2.extend(aux1)
-    noise_adv_acc_l2.extend(aux2)
+    if os.path.isfile(name_str + 'SSNR_acc.npy'):
+        aux1 = ssnr_eval_acc(network, x, t)
+        ssnr_acc.extend(aux1)
+    else:
+        ssnr_acc = 0
+    if os.path.isfile(name_str + 'gauss_noise.npy'):
+        aux1 = gaussian_noise_acc(network, x, t)
+        noise_acc.extend(aux1)
+    else:
+        noise_acc = 0
+    if os.path.isfile(name_str + 'linf_adv_acc.npy'):
+        aux1, aux2 = linf_attacks(network, x, t)
+        adv_acc_linf.extend(aux1)
+        noise_adv_acc_linf.extend(aux2)
+    else:
+        adv_acc_linf = 0
+        noise_adv_acc_linf = 0
+    if os.path.isfile(name_str + 'l2_adv_acc.npy'):
+        aux1, aux2 = l2_attacks(network, x, t)
+        adv_acc_l2.extend(aux1)
+        noise_adv_acc_l2.extend(aux2)
+    else:
+        adv_acc_l2 = 0
+        noise_adv_acc_l2 = 0
 
-    return adv_acc_linf, noise_adv_acc_linf, adv_acc_l2, noise_adv_acc_l2, noise_acc, ssnr_acc
+    return cuda.to_cpu(cp.asarray(adv_acc_linf)), cuda.to_cpu(cp.asarray(noise_adv_acc_linf)), cuda.to_cpu(cp.asarray(adv_acc_l2)), cuda.to_cpu(cp.asarray(noise_adv_acc_l2)), cuda.to_cpu(cp.asarray(noise_acc)), cuda.to_cpu(cp.asarray(ssnr_acc))
 
 def robustness_eval(network, x, t):
     ## Obtain through numerical integration the variables required to certify the robustness for different input sd
@@ -199,7 +219,7 @@ def robustness_eval(network, x, t):
     smooth_margin = np.vstack((margin_zero,np.asarray(results_pooled2)))
 
     t2 = time.perf_counter()
-    print("Exe. time for sd {}= {}".format(sd, t2 - t1))
+    print("Exe. time for sd {} = {}".format(sd, t2 - t1))
 
     return c_prob, ru_prob, smooth_margin, np.asarray(mean_out_arr), np.asarray(var_out_arr)
 
@@ -229,72 +249,13 @@ def emp_evals(network, x, target):
 
     return cuda.to_cpu(cp.asarray(prob_c_arr)), cuda.to_cpu(cp.asarray(margin_mean_arr)), cuda.to_cpu(cp.asarray(margin_var_arr))
 
-def ssnr_metrics(network, x, t, dest):
-    units = network.units[0]
-    layers = network.n_hl
-    epoch = network.epoch
-    n_sim = network.n_sim
-    loss = network.loss
-    d = network.d
-    x_var = network.x_var
-    print("Loss: {}".format(loss))
-    print("d: {}".format(d))
-    print("X_var: {}".format(x_var))
-
-    target = cuda.to_cpu(t.array)
-    _, mean_s, var_s, mean_h, var_h = network.model.moment_propagation(len(network.model), x, 0, x.array)
-    ## Obtain the metrics only for correctly classified samples
-    ## For this we need a np boolean array of correct samples
-    corr_class = cuda.to_cpu(cp.argmax(mean_s.array, axis=1))
-    corr_idx = corr_class == target
-    corr_samples = np.arange(10000)[corr_idx]
-    corr_x = x[corr_samples,:].reshape((len(corr_samples),-1))
-    corr_t = t[corr_idx]
-
-    aux = 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_SSNR_acc.npy'.format(layers, units, epoch, loss, d, x_var, n_sim)
-    while os.path.exists(dest + aux):
-        n_sim += 1
-        aux = 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_SSNR_acc.npy'.format(layers, units, epoch, loss, d, x_var, n_sim)
-
-    print("### SSNR robustness ###")
-    ssnr_acc = [cp.asarray(1)]
-
-    aux1 = ssnr_eval_acc(network, corr_x, corr_t)
-    ssnr_acc.extend(aux1)
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_SSNR_acc'.format(layers, units, epoch, loss, d, x_var, n_sim), cuda.to_cpu(cp.asarray(ssnr_acc)))
-
-def accuracy(network, x, t, dest):
-    units = network.units[0]
-    layers = network.n_hl
-    epoch = network.epoch
-    n_sim = network.n_sim
-    loss = network.loss
-    d = network.d
-    x_var = network.x_var
-
-    aux = 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_clean_acc.npy'.format(layers, units, epoch, loss, d, x_var, n_sim)
-    while os.path.exists(dest + aux):
-        n_sim += 1
-        aux = 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_clean_acc.npy'.format(layers, units, epoch, loss, d, x_var, n_sim)
-
-    print("# of trained net: {}".format(n_sim))
-    print("Loss: {}".format(loss))
-    print("d: {}".format(d))
-    print("X_var: {}".format(x_var))
-    acc = network.model.validation(x, t)
-    acc_noise = network.model.validation(x, t, noise_in=True, sd=0.1, train=False)
-    print("Clean accuracy : {}".format(acc))
-    print("Clean noise accuracy : {}".format(acc_noise))
-
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_clean_acc'.format(layers, units, epoch, loss, d, x_var, n_sim), cuda.to_cpu(cp.asarray(acc)))
-
 def w_linf(network):
     aux = cp.zeros(len(network.model))
     for i in range(len(network.model)):
         aux1 = cp.max(cp.sum(cp.clip(network.model[i].ortho_w.array, a_min = 0), axis = 1))
         aux[i] = aux1
 
-    return  aux
+    return  cuda.to_cpu(cp.asarray(aux))
 
 def readcsv(dest, csvname):
     import csv
@@ -308,95 +269,49 @@ def readcsv(dest, csvname):
         print(row)
     return rows
 
-def norm_test(network, x_m, dest):
-    units = network.units[0]
-    layers = network.n_hl
-    epoch = network.epoch
-    n_sim = network.n_sim
-    loss = network.loss
-    d = network.d
-    x_var = network.x_var
-    print("Loss: {}".format(loss))
-    print("d: {}".format(d))
-    print("X_var: {}".format(x_var))
-
-    aux = 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_norm_test.npy'.format(layers, units, epoch, loss, d, x_var, n_sim)
-    while os.path.exists(dest + aux):
-        n_sim += 1
-        aux = 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_norm_test.npy'.format(layers, units, epoch, loss, d, x_var, n_sim)
-
-    import cupy as cp
-    from chainer import cuda
-    import scipy.stats as stats
-    x_var_arr = [0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28, 1.75]
-    app_norm_perc = []
-    for x_var in x_var_arr:
-        outs = cp.asarray(network.model.out_sampling(x_m, cp.sqrt(x_var), samples=50))
-        _, mean_s, var_s, mean_h, var_h = network.model.moment_propagation(len(network.model), x_m, x_var, x_m.array)
-        std_outs = cuda.to_cpu((outs.T - mean_s.array.reshape((10000, 10, 1))) / cp.sqrt(var_s.array.reshape((10000, 10, 1))))
-        ad_stat = []
-        rand_idx = np.random.choice(10000, 1000, replace=False)
-        for j in rand_idx:
-            for i in range(10):
-                aux1 = stats.anderson(std_outs[j, i, :])
-                ad_stat.append(aux1[0])
-
-        aux = np.asarray(ad_stat)
-        app_norm_perc.append(aux[aux <= 2.492].shape[0] / 100)
-
-    print(app_norm_perc)
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_norm_test'.format(layers, units, epoch, loss, d, x_var, n_sim), np.asarray(app_norm_perc))
-
-
 def measurements(network, x, t, dest):
     units = network.units[0]
     layers = network.n_hl
     epoch = network.epoch
-    n_sim = network.n_sim
+    training_num = network.training_num
     loss = network.loss
     d = network.d
     x_var = network.x_var
     print("Loss: {}".format(loss))
     print("d: {}".format(d))
     print("X_var: {}".format(x_var))
+    name_str = dest + 'loss_{}_ep{}_x_var_{}_d_{}_{}_'.format(loss, epoch, x_var, d, training_num)
 
     target = cuda.to_cpu(t.array)
     _, mean_s, var_s, mean_h, var_h = network.model.moment_propagation(len(network.model), x, 0, x.array)
     ## Obtain the metrics only for correctly classified samples
-    ## For this we need a np boolean array of correct samples
-    corr_class = cuda.to_cpu(cp.argmax(mean_s.array, axis=1))
-    corr_idx = corr_class == target
-    corr_samples = np.arange(10000)[corr_idx]
-    corr_x = x[corr_samples,:].reshape((len(corr_samples),-1))
-    corr_t = t[corr_idx]
+    ## For this we need a boolean ndarray of correct samples
+    corr_class = cuda.to_cpu(cp.argmax(mean_s.array, axis=1)) # ndarray containing the output indices with maximal value
+    corr_idx = corr_class == target # boolean ndarray of size = the number of test samples with True where correctly classified 
+    corr_samples = np.arange(10000)[corr_idx]  # ndarray containing the indices of correctly classified samples
+    corr_x = x[corr_samples,:].reshape((len(corr_samples),-1)) # ndarray containing the test samples that are correclt classified
+    corr_t = t[corr_idx] # ndarray containing the labels of correctly classified inputs
 
-    aux = 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_W_Linf_norm.npy'.format(layers, units, epoch, loss, d, x_var, n_sim)
-    while os.path.exists(dest + aux):
-        n_sim += 1
-        aux = 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_W_Linf_norm.npy'.format(layers, units, epoch, loss, d, x_var, n_sim)
+    measurements_dict = {}
+    measurements_dict['target'] = cuda.to_cpu(corr_t.array)
+    measurements_dict['clean_acc'] = len(corr_t.array)/len(target.array)
+    measurements_dict['W_Linf_norm'] = w_linf(network)
+    measurements_dict['linf_adv_acc'], measurements_dict['linf_adv_acc_noise'], measurements_dict['l2_adv_acc'], measurements_dict['l2_adv_acc_noise'], measurements_dict['gauss_noise'], measurements_dict['SSNR_acc'] = perturbation_eval(network, corr_x, corr_t)
+    if any(not os.path.isfile(name_str + measurement) for measurement in ['p_c', 'p_ru', 'smooth_margin', 'mean_out', 'var_out']):
+        measurements_dict['p_c'], measurements_dict['p_ru'], measurements_dict['smooth_margin'], measurements_dict['mean_out'], measurements_dict['var_out'] = robustness_eval(network, corr_x, cuda.to_cpu(corr_t.array))
+    if any(not os.path.isfile(name_str + measurement) for measurement in ['emp_p_c', 'emp_margin_mean', 'emp_margin_var']):
+        measurements_dict['emp_p_c'], measurements_dict['emp_margin_mean'], measurements_dict['emp_margin_var'] = emp_evals(network, x, t)
 
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_target'.format(layers, units, epoch, loss, d, x_var, n_sim),cuda.to_cpu(corr_t.array))
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_W_Linf_norm'.format(layers, units, epoch, loss, d, x_var, n_sim), cuda.to_cpu(cp.asarray(w_linf(network))))
+    save_measurements(name_str, measurements_dict)
 
-    adv_acc_linf, noise_adv_acc_linf, adv_acc_l2, noise_adv_acc_l2, noise_acc, ssnr_acc = perturbation_eval(network, corr_x, corr_t)
+def list_nets(net_save_dir):
+    files = glob.glob(net_save_dir + "/trained*")
+    return files
 
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_linf_adv_acc'.format(layers, units, epoch, loss, d, x_var, n_sim),cuda.to_cpu(cp.asarray(adv_acc_linf)))
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_linf_adv_acc_noise'.format(layers, units, epoch, loss, d, x_var, n_sim),cuda.to_cpu(cp.asarray(noise_adv_acc_linf)))
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_l2_adv_acc'.format(layers, units, epoch, loss, d, x_var, n_sim),cuda.to_cpu(cp.asarray(adv_acc_l2)))
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_l2_adv_acc_noise'.format(layers, units, epoch, loss, d, x_var, n_sim),cuda.to_cpu(cp.asarray(noise_adv_acc_l2)))
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_gauss_noise'.format(layers, units, epoch, loss, d, x_var, n_sim),cuda.to_cpu(cp.asarray(noise_acc)))
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_SSNR_acc'.format(layers, units, epoch, loss, d, x_var, n_sim), cuda.to_cpu(cp.asarray(ssnr_acc)))
+def save_measurements(name_str, measurements_dict):
+    for measure_name, measure in measurements_dict:
+        if measure != 0:
+            np.save(name_str + measure_name, measure)
 
-    p_c_arr, p_ru_arr, smooth_margin_arr, mean_out_arr, var_out_arr = robustness_eval(network, corr_x, cuda.to_cpu(corr_t.array))
-
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_p_c'.format(layers, units, epoch, loss, d, x_var, n_sim), p_c_arr)
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_p_ru'.format(layers, units, epoch, loss, d, x_var, n_sim), p_ru_arr)
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_smooth_margin'.format(layers, units, epoch, loss, d, x_var, n_sim), smooth_margin_arr)
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_mean_out'.format(layers, units, epoch, loss, d, x_var, n_sim), mean_out_arr)
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_var_out'.format(layers, units, epoch, loss, d, x_var, n_sim), var_out_arr)
-
-    emp_p_c, emp_margin_mean, emp_margin_var = emp_evals(network, x, t)
-
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_emp_p_c'.format(layers, units, epoch), emp_p_c)
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_emp_margin_mean'.format(layers, units, epoch), emp_margin_mean)
-    np.save(dest + 'HL{}_{}_ep{}_{}_d_{}_x_var_{}_{}_emp_margin_var'.format(layers, units, epoch), emp_margin_var)
+def manage_gpu():
+    pass
