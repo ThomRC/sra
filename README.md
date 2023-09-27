@@ -27,8 +27,16 @@ Run the following to activate the environment in order to run the provided code
 
     conda activate sra-env
 
-# How to use
+# Clone github repository
+In the terminal change your directory to the one you want to clone the repository
 
+    git clone https://github.com/ThomRC/sra.git
+
+Go to the repository so you can run the experiments.py file
+
+    cd sra
+
+# How to use
 The only python file that you need to run is experiments.py
 
 This file requires five positional arguments like:

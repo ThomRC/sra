@@ -169,19 +169,14 @@ if __name__ == '__main__':
 
             while True:
                 curr_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
-                print(curr_dir)
-                print(curr_fold)
                 measures_save_dir = curr_dir + "/measurements/{}/".format(kwargs['dataset']) + "{}/".format(kwargs['arch'])
                 if not os.path.isdir(measures_save_dir[0:-1]):
                     os.makedirs(measures_save_dir[0:-1])
 
                 filelist = robustness.list_nets(kwargs['net_save_dir'], loss = loss, d = d, x_var = x_var, load_mode = mode)
-                print(filelist)
                 # loops through all files in the .csv file
                 for file in filelist:
                     net_path = file
-                    print(kwargs['net_save_dir'])
-                    print(measures_save_dir)
                     kwargs_load = {'exp_count': None, 'success': None, 'data_save_dir': None}
                     kwargs = {**kwargs, **kwargs_load}
                     # Builds NNAgent object with architecture settings
