@@ -4,9 +4,10 @@ import cupy as cp
 import chainer.functions as F
 from chainer import link, variable, initializers, types, utils
 
-from relu_moments import relu_moments
+from models.activations.relu_moments import relu_moments
 
 class DenseLinear(link.Link):
+
     def __init__(self,
                  in_size: tp.Optional[int],
                  out_size: tp.Optional[int] = None,
@@ -50,25 +51,29 @@ class DenseLinear(link.Link):
         return 'in_size={}, out_size={}, bias={}'.format(
             self.in_size, self.out_size, self.b is not None)
 
-    def relu_moment_propagation(self, x_m, x_v, cov_ub = None, w_grad = False, ortho_ws = True):
+    def relu_moment_propagation(self, x_m, x_v, w_grad = False):
+        """ Computes the pre-activation's mean and variance vectors and calls the relu_moments function
+
+        Args:
+            x_m: previous layer's mean vector
+            x_v: previous layer's variance vector (we assume independent activations, i.e., zero covariances
+            w_grad: boolean telling whether the gradients are needed or not
+
+        Returns:
+
+        """
         if self.W.array is None:
             in_size = utils.size_of_shape(x.shape[n_batch_axes:])
             self._initialize_params(in_size)
 
         if w_grad:
-            self.orthonormalize()
+            self.orthonormalize() # carries orthonormalization only in the case of needing the W gradients
             W = self.ortho_w
         else:
             W = self.ortho_w.array
 
         mean_s = F.linear(x_m,W)
-        if ortho_ws:
-            var_s = F.linear(x_v,W**2)
-        else:
-            aux = self.xp.zeros((x_m.shape[1],x_m.shape[1],x_m.shape[1]))
-            aux = self.xp.fill_diagonal(aux,1)
-            cov_h = x_v @ aux
-            var_s = F.linear(x_v,W**2)
+        var_s = F.linear(x_v,W**2)
 
         h_m, h_v = relu_moments(mean_s, var_s)
 

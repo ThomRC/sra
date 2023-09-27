@@ -15,48 +15,6 @@ def bjorck_orthonormalize(w, beta=0.5, iters=20, order=1):
     elif order == 1:
         for _ in range(iters):
             w = (1 + beta) * w - beta * F.matmul(w,F.matmul(w.T,w))
-
-    elif order == 2:
-        if beta != 0.5:
-            print("Bjorck orthonormalization with order more than 1 requires a beta of 0.5. ")
-            exit(-1)
-        for _ in range(iters):
-            w_t_w = F.matmul(w.T,w)
-            w_t_w_w_t_w = F.matmul(w_t_w,w_t_w)
-            w = (+ (15 / 8) * w
-                - (5 / 4) * F.matmul(w, w_t_w)
-                + (3 / 8) * F.matmul(w, w_t_w_w_t_w))
-
-    elif order == 3:
-        if beta != 0.5:
-            print("Bjorck orthonormalization with order more than 1 requires a beta of 0.5. ")
-            exit(-1)
-        for _ in range(iters):
-            w_t_w = F.matmul(w.T,w)
-            w_t_w_w_t_w = F.matmul(w_t_w,w_t_w)
-            w_t_w_w_t_w_w_t_w = F.matmul(w_t_w,w_t_w_w_t_w)
-            w = (+ (35 / 16) * w
-                 - (35 / 16) * F.matmul(w,w_t_w)
-                 + (21 / 16) * F.matmul(w,w_t_w_w_t_w)
-                 - (5 / 16) * F.matmul(w,w_t_w_w_t_w_w_t_w))
-
-    elif order == 4:
-        if beta != 0.5:
-            print("Bjorck orthonormalization with order more than 1 requires a beta of 0.5. ")
-            exit(-1)
-
-        for _ in range(iters):
-            w_t_w = F.matmul(w.T,w)
-            w_t_w_w_t_w = F.matmul(w_t_w,w_t_w)
-            w_t_w_w_t_w_w_t_w = F.matmul(w_t_w,w_t_w_w_t_w)
-            w_t_w_w_t_w_w_t_w_w_t_w = F.matmul(w_t_w,w_t_w_w_t_w_w_t_w)
-
-            w = (+ (315 / 128) * w
-                 - (105 / 32) * F.matmul(w,w_t_w)
-                 + (189 / 64) * F.matmul(w,w_t_w_w_t_w)
-                 - (45 / 32) * F.matmul(w,w_t_w_w_t_w_w_t_w)
-                 + (35 / 128) * F.matmul(w,w_t_w_w_t_w_w_t_w_w_t_w))
-
     else:
         print("The requested order for orthonormalization is not supported. ")
         exit(-1)
@@ -64,6 +22,17 @@ def bjorck_orthonormalize(w, beta=0.5, iters=20, order=1):
     return w
 
 def min_ortho_iter(w, beta=0.5, iters=30, order=1):
+    """ Function that reduces the number of iterations required to still achieve a mean pairwise dot product between the weight matrix rows lower than 10**-8
+
+    Args:
+        w: weight matrix before the ortogonalization
+        beta: BO hyperparameter, original value used in all experiments is 0.5
+        iters: BO hyperparameter, original value used in all experiments is 30. This value changes during training using the current function
+        order: BO hyperparameter, original value used in all experiments is 1
+
+    Returns: the new number of iterations for the current layer
+
+    """
     scaling = get_safe_bjorck_scaling(w)
     mean_dot = 0
     with no_backprop_mode():
@@ -92,6 +61,7 @@ def min_ortho_iter(w, beta=0.5, iters=30, order=1):
         return iters
 
 def get_safe_bjorck_scaling(weight):
+    """ Gets the current layer scaling factor to guarantee convergence for BO """
     bjorck_scaling = chainer.Variable(cp.sqrt(weight.shape[0] * weight.shape[1]).astype(dtype=cp.float32))
 
     return bjorck_scaling

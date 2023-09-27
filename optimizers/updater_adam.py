@@ -1,15 +1,12 @@
 import typing as tp  # NOQA
 
 class Adam:
+    """ Implementation of Adam with warm-restart """
     def __init__(self, lr=0.001, beta1=0.9, beta2=0.999, clip = 1., schedule = 'cst', lr_0 = 1.0, **kwargs):
         super(Adam, self).__init__()
         self.lr = lr
         self.lr_sch = lr_0
-        # self.lr_sch_epoch = 30
-        self.lr_sch_epoch = 20
-        # self.lr_decay_counter = self.xp.ceil(self.lr_decay_epoch * 468.75)
-        # 468.75 iterations = 1 epoch for 60000 training data and 128 minibatch
-        # 390.625 iterations = 1 epoch for 50000 training data and 128 minibatch
+        self.lr_sch_epoch = 20 # When = 20 in 300 epochs it finishes the fourth warm restart cycle
         self.beta1 = beta1
         self.beta2 = beta2
         self.clip = clip
@@ -19,7 +16,6 @@ class Adam:
         self.v = None
         self.m_bu = None
         self.v_bu = None
-        self.reg_grad = 0
         self.adam_grad = 0
         self.schedule = schedule
         self.last_epoch = 0
@@ -29,25 +25,23 @@ class Adam:
         self.spe = 0 ### step per epoch
         self.W_bu = self.W.array
 
-    def mean_abs_grad(self):
-        # Returns the mean absolute gradient for respective layer
-        loss_grad = self.xp.mean(self.xp.absolute(self.W.grad))
-        return loss_grad
-
     def update(self, epoch, grad_norm):
         if self.m is None:
+            # If first iteration it creates the arrays for the m and v variables required for Adam
             self.m = self.xp.zeros_like(self.W.array)
             self.v = self.xp.zeros_like(self.W.array)
 
         if epoch == 0:
-            self.spe += 1
+            self.spe += 1 # counts the number of steps for the first epoch, to be used in the remaining of the updater
         else:
             if self.counter % self.spe == 0:
+                # Stores the current weights, m and v variables for current layer every time a new epoch starts
                 self.W_bu = self.xp.copy(self.W.array)
                 self.m_bu = self.xp.copy(self.m)
                 self.v_bu = self.xp.copy(self.v)
 
             if self.last_epoch != epoch:
+                # Used in case there is an error in the gradient and the previous epoch backup is used
                 if self.last_epoch == 0:
                     self.step_counter += self.spe
 
@@ -55,6 +49,7 @@ class Adam:
                 self.epoch_counter += 1
 
             if self.schedule == 'cos-ann':
+                # Learning rate decay for cosine annealing
                 self.lr_sch = 0.5 * (1 + self.xp.cos(self.xp.pi * self.step_counter / (self.spe * self.lr_sch_epoch))).astype('float32')
 
                 if self.epoch_counter == self.lr_sch_epoch:
@@ -63,8 +58,10 @@ class Adam:
                     print("### Warm Restart: {} epochs".format(self.lr_sch_epoch))
                     self.lr_sch_epoch *= 2
             elif self.schedule == 'cst':
+                # Constant learning rate
                 pass
             elif self.schedule == 'step':
+                # Step learning rate decay
                 if epoch % self.lr_sch_epoch == 0:
                     self.lr_sch *= 0.1
                     print("################################ lr = {}".format(self.lr_sch))
@@ -77,6 +74,7 @@ class Adam:
             self.step_counter += 1
 
         if self.xp.isnan(self.W.grad.max()):
+            # In case there's any nan in the gradients it restores the weights, m and v from the last epoch's backup
             if self.counter > 2000:
                 print("Gradient failure. Reducing lr and restoring weights from {} previous steps".format(self.spe))
                 self.W.array = self.xp.copy(self.W_bu)
@@ -84,8 +82,8 @@ class Adam:
                 self.v = self.xp.copy(self.v_bu)
                 self.lr = self.lr/10
                 print(self.lr)
-            return 1
         else:
+            # Computes the Adam update
             norm_ratio = 1 / (grad_norm + 0.0001)
 
             adam_mult = (self.xp.sqrt(1.0 - self.beta2**self.counter) / (1.0 - self.beta1**self.counter)).astype('float32')
@@ -97,5 +95,3 @@ class Adam:
                 self.W.array -= self.lr_sch * self.lr * self.adam_grad
 
             self.counter += 1
-
-            return 1

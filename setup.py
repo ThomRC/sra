@@ -12,7 +12,7 @@ ROOT = os.path.abspath(os.path.dirname(__file__))
 with open(os.path.join(ROOT, 'README.md'), encoding="utf-8") as f:
     README = f.read()
 
-setup(name='sra-paper',
+setup(name='sra',
       version='1.0.0',
       description='Implementation of experiments from Smoothed Robustness Analysis paper.',
       long_description=README,

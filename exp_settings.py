@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
-from chainer import initializers
-import cupy as cp
 import sys
 import os
-os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+
+from chainer import initializers
+import cupy as cp
+
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"  # In case the GPU order in the bus is different from the one listed by CUDA
 
 def settings():
     """ Function to return dictionary with all experimental and training settings
@@ -50,30 +52,24 @@ def settings():
     # fc_hl_units = [units, units, units, units, units, units]
     # IN CASE OF EACH LAYER HAVING DIFFERENT # OF UNITS PLEASE CHANGE IT HERE MANUALLY
 
-    fc_hl = len(fc_hl_units)
-    hl_units.extend(fc_hl_units.copy())  # for lists
     nobias = True  # OV: True
     initial_bias = None  # OV: None
 
     # Creates string with current architecture as "*number_of_layers*HL_*#unitsHL1*x*#unitsHL1*x...x*#unitsHLn*"
     # to be used when storing the trained nets
-    nhl = str(len(hl_units))
-    arch = nhl + 'HL_'
-    for i in range(len(hl_units)):
-        arch += str(hl_units[i]) + 'x'
+    fc_hl = len(fc_hl_units)
+    arch = str(fc_hl) + 'HL_'
+    for i in fc_hl_units:
+        arch += str(i) + 'x'
     arch = arch[0:-1]
     # /ARCHITECTURE SETTINGS
     ############################################################################
     curr_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
-    print(curr_dir)
-    print(curr_fold)
+
     net_save_dir = curr_dir + "/trained_NNs/{}/".format(dataset) + "{}".format(arch)
     if save_net:
-        try:
-            original_umask = os.umask(0)
-            os.makedirs(net_save_dir, mode=0o770)
-        finally:
-            os.umask(original_umask)
+        if not os.path.isdir(net_save_dir):
+            os.makedirs(net_save_dir)
 
     ############################################################################
     # EXPERIMENTAL SETTINGS
@@ -92,7 +88,6 @@ def settings():
     # INITIZALIZATION
     ############################################################################
     init = 'orthogonal'  # OV: 'orthogonal' # if the weights should be initialized as 'orthogonal' or 'random'
-    batchnorm = False
 
     if not sys.argv[5]:
         raise RuntimeError('Four arguments required: \n'
@@ -102,10 +97,11 @@ def settings():
                            'Mode: \'train\' or \'load\' \n'
                            'gpu: number of gpu to be used')
     else:
-        loss = sys.argv[1]
+        loss = sys.argv[1].lower()
         d = cp.asarray(float(sys.argv[2]), dtype=cp.float32)
         x_var = cp.asarray(float(sys.argv[3]), dtype=cp.float32)
-        mode = sys.argv[4]
+        mode = sys.argv[4].lower()
+        gpu = sys.argv[5]
 
     if init in {'random', 'orthogonal'}:
         if init == "random":
@@ -116,16 +112,16 @@ def settings():
             # config used for bjorck orthog. on paper exps: 'beta': 0.5,'iter': 30, 'order': 1, 'safe_scaling': True
             bjorck_config = {'beta': 0.5, 'iter': 30, 'order': 1, 'safe_scaling': True, 'dynamic_iter': True}
     else:
-        raise RuntimeError('Chosen initialization couldn\'t be recognized\n'
+        raise RuntimeError('Chosen initialization couldn\'target be recognized\n'
                            'Currently implemented: '
                            '\n- Random (\'random\')'
                            '\n- Orthogonal (\'orthogonal\')')
 
-    kwargs_exp = {'gpu': gpu, 'dataset': dataset, 'tr_size': tr_size, 'normalization': in_norm, 'batchnorm': batchnorm,
-                  'in_padding': in_padding, 'fc_hl': fc_hl, 'hl_units': hl_units, 'in_interval': in_interval,
+    kwargs_exp = {'gpu': gpu, 'dataset': dataset, 'tr_size': tr_size, 'normalization': in_norm,
+                  'in_padding': in_padding, 'fc_hl': fc_hl, 'fc_hl_units': fc_hl_units, 'in_interval': in_interval,
                   'in_center': in_center, 'n_exp': n_exp, 'n_epoch': n_epoch, 'save_data': save_data,
                   'save_net': save_net, 'net_save_dir': net_save_dir, 'batch_size': batch_size}
-    kwargs_model = {'arch': arch, 'ortho_ws': ortho_ws, 'loss': loss, 'x_var': x_var, 'd': d, 'init': init, 'pad': pad,
+    kwargs_model = {'arch': arch, 'ortho_ws': ortho_ws, 'loss': loss, 'x_var': x_var, 'd': d, 'init': init,
                     'nobias': nobias, 'initial_w': initializer, 'initial_bias': initial_bias, 'lr': lr,
                     'beta1': adam_beta1, 'beta2': adam_beta2, 'schedule': schedule, 'bjorck_config': bjorck_config}
     kwargs = {**kwargs_exp, **kwargs_model}

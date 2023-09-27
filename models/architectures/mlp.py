@@ -1,57 +1,24 @@
 import typing as tp  # NOQA
 
+import cupy as cp
+import numpy as np
 import chainer
 from chainer import no_backprop_mode, cuda
 import chainer.functions as F
 from chainer.functions import relu as activation
 import chainer.links as L
 from chainer import Variable
-# dummy
-import losses as losses
-import cupy as cp
-import numpy as np
+
+import models.losses as losses
 
 class FeedForwardNN(chainer.ChainList):
-
-    """Linear layer with random Normal weights (a.k.a.\\  stochastic Normal fully-connected layer).
-    This is a link that wraps the :func:`~chainer.functions.linear` function,
-    and holds a parameter 1 ``W`` matrix and optionally a parameter 2 ``P2`` matrix and
-    a bias vector ``b`` as parameters.
-    ``W`` and ``P2`` hold the parameters describing the Normal distribution from which
-    the weight matrix ``W``, used for the forward pass, is sampled from.
-    If ``initial_w`` is left to the default value of ``None``, the weight matrix
-    ``W`` is initialized with i.i.d. Gaussian samples, each of which has zero
-    mean and deviation :math:`\\sqrt{1/\\text{in_size}}`. The bias vector ``b``
-    is of size ``out_size``. If the ``initial_bias`` is to left the default
-    value of ``None``, each element is initialized as zero.  If the ``nobias``
-    argument is set to ``True``, then this link does not hold a bias vector.
-    Args:
-        n_in (int or None): Dimension of input vectors. If unspecified or
-            ``None``, parameter initialization will be deferred until the
-            first forward data pass at which time the size will be determined.
-        n_out (int): Dimension of output vectors. If only one value is
-            passed for ``in_size`` and ``out_size``, that value will be used
-            for the ``out_size`` dimension.
-        parametrization (str): Name of the parametrization used to sample the
-            W matrix.
-            ``usual``, ``natural``, ``det``
-        nobias (bool): If ``True``, then this function does not use the bias.
-        initial_w (:ref:`initializer <initializer>`): Initializer to initialize
-            the weight matrix mean. W and P2 are obtained according to their
-            relatioship to the mean. When it is :class:`numpy.ndarray`,
-            its ``ndim`` should be 2. If ``initial_w`` is ``None``, then the
-            weights are initialized with i.i.d. Gaussian samples, each of which
-            has zero mean and deviation :math:`\\sqrt{1/\\text{in_size}}`.
-        initial_bias (:ref:`initializer <initializer>`): Initializer to
-            initialize the bias. If ``None``, the bias will be initialized to
-            zero. When it is :class:`numpy.ndarray`, its ``ndim`` should be 1.
+    """ Class for feedforward multilayer perceptron that is a list containing in each element the sequence of operations (linear layer, activation, linear layer, ...)
     """
     def __init__(
             self,
             n_in: tp.Optional[int],
             *args, # tuple containing the number of units in each HL
             n_out: tp.Optional[int] = None,
-            batchnorm: tp.Optional[bool] = False,
             fc_hl: tp.Optional[int] = 2,
             **kwargs
     ) -> None:
@@ -64,18 +31,16 @@ class FeedForwardNN(chainer.ChainList):
         self.zero_cat_in = False
         self.n_hl = fc_hl
         self.epoch = 0
-        self.training_num = kwargs['training_num']
         self.arch = kwargs['arch']
         self.gpu = kwargs['gpu']
+        kwargs['beta'] = 0
 
-        if kwargs['ortho_ws'] is True:
-            from bjorck_linear import BjorckLinear as LinearLink
-            kwargs['beta'] = 0
-            print('Training with *deterministic* and orthogonal weights without rotation')
+        if kwargs['ortho_ws']:
+            from models.layers.bjorck_linear import BjorckLinear as LinearLink
+            print('Training with orthogonal weights')
         else:
             from chainer.links import Linear as LinearLink
-            kwargs['beta'] = 0
-            print('Training with *deterministic* and orthogonal weights with rotation')
+            print('Training with non-orthogonal weights')
 
         if not all(isinstance(x, int) for x in args):
             raise RuntimeError('Number of units in a layer must all be integers.')
@@ -83,22 +48,26 @@ class FeedForwardNN(chainer.ChainList):
         if self.n_hl != len(args):
             raise RuntimeError('Number of layers and specified number of units per layer does not match.')
 
+
+        print('### Generating NN model')
+        print('# If this is the first time running it can take several minutes. Please wait')
+
         with self.init_scope():
-            self.nobias = kwargs['nobias']
+            self.nobias = kwargs['nobias'] # whether units from each layer have bias or not
             self.bjorck_config = kwargs['bjorck_config']
 
             if self.n_hl > 0:
+                # Creates the object where each element is a linear layer
                 for i in range(fc_hl):
                     if kwargs['ortho_ws']:
                         self.add_link(LinearLink(args[i], i, config = self.bjorck_config, **kwargs).to_gpu())
                     else:
                         self.add_link(LinearLink(args[i], i, **kwargs).to_gpu())
 
-                    if batchnorm:
-                        self.add_link(L.BatchNormalization(size = args[i]).to_gpu())
             self.add_link(LinearLink(n_out,  fc_hl, config = self.bjorck_config, **kwargs).to_gpu())
 
     def __call__(self, x, y = None, norm_out = False, train = True):
+        """ Carries the forward pass over each element of the NN object under the specified activation function"""
         h = x
         for link in range(len(self) - 1):
             if hasattr(self[link], 'W'):
@@ -110,75 +79,102 @@ class FeedForwardNN(chainer.ChainList):
         return h
 
     def grad_norm(self):
-        lw_grad_norm = self.xp.array([])
-        mean_abs_grad = self.xp.array([])
+        """ Obtain the l2-norm of the gradient to be used in the update_net function to avoid exploding gradients"""
         tot_grad = self.xp.array([])
         count = 0
         for link in self:
             if hasattr(link, 'W'):
-                mean_abs_grad = self.xp.hstack((mean_abs_grad,link.mean_abs_grad()))
                 tot_grad = self.xp.hstack((tot_grad,link.W.grad.flatten()))
-                lw_grad_norm = self.xp.hstack((lw_grad_norm, self.xp.linalg.norm(link.W.grad.flatten())))
                 count += 1
         tot_grad_norm = self.xp.linalg.norm(tot_grad)
-        return lw_grad_norm, mean_abs_grad, tot_grad_norm
+        return tot_grad_norm
 
     def update_net(self, epoch):
-        lw_grad_norm, mean_abs_grad, tot_grad_norm = self.grad_norm()
+        """ Updates the weights from each layer using the update function from each linear layer object"""
+        tot_grad_norm = self.grad_norm()
         for _, link in enumerate(self):
             if hasattr(link, 'W'):
-                update_result = link.update(epoch, tot_grad_norm)
-                if update_result == 0:
-                    return 0
-        return 1
+                link.update(epoch, tot_grad_norm)
 
     def noise_inj(self, x, sd, dist = 'Normal', radius = 0.3):
+        """ Obtains a noise sample of same dimension as input x to be injected in the input"""
         if dist == 'Normal':
             x_noise = self.xp.random.standard_normal(x.shape).astype(self.xp.float32) * sd
         elif dist == 'Uniform':
             x_noise = (self.xp.random.rand(x.shape).astype(self.xp.float32)*2 - 1) * radius
         return x_noise
 
-    def validation(self, val_in, val_out, noise_in = False, sd = 1., dist = 'Normal', train = True, ssnr = False, ssnr_ratio = None):
+    def validation(self, x, target, noise_in = False, sd = 1., dist = 'Normal', train = True, ssnr = False, ssnr_ratio = None):
+        """ Function that returns the accuracy over the input array 'x' with targets 'target'
+
+        Args:
+            x: array of inputs subject to classification
+            target: array of target classes
+            noise_in: boolean telling whether use noise or not
+            sd: standard deviation of the input noise in case noise_in = True
+            dist: distribution to be used in case noise_in = True ('Normal' or 'Uniform')
+            train: boolean telling whether the input is the training data or not, in case of True and the number of samples > 10000 calculates accuracy for random 10000 samples
+            ssnr: boolean telling whether the input will be corrupted by a "gray" image
+            ssnr_ratio: proportion of the input that is corrupted by the "gray" image
+
+        Returns:
+
+        """
         # Using no_backprop_mode method since it is just required to forward the input through the network, and not to build a computational graph to apply the backprop
         with no_backprop_mode():
-            if noise_in == True and ssnr == False:
-                noise = self.noise_inj(val_in, sd, dist)
-            elif noise_in == True and ssnr == True:
+            if noise_in and not ssnr:
+                noise = self.noise_inj(x, sd, dist)
+            elif noise_in and ssnr:
                 if ssnr_ratio is None:
                     raise RuntimeError('Need to specify SSNR ratio parameter')
                 else:
-                    noise = self.noise_inj(val_in, self.intvl_in * 6/255, 'Normal') + self.center_in
+                    noise = self.noise_inj(x, self.intvl_in * 6/255, 'Normal') + self.center_in
 
-            if noise_in == False and train and ssnr == False:
-                if len(val_out) > 10000:
+            if train:
+                # Only 10000 samples from training data are used and there's no added noise if train = True
+                if len(target) > 10000:
                     tr_spls = 10000
                 else:
-                    tr_spls = len(val_out)
-                idx = self.xp.random.choice(len(val_out), tr_spls, replace=False)
+                    tr_spls = len(target)
+                idx = self.xp.random.choice(len(target), tr_spls, replace=False)
                 with no_backprop_mode():
-                    val_out = val_out[idx]
-                    h = val_in[idx]
-            elif noise_in == False and not train and ssnr == False:
-                h = val_in
-            elif noise_in == True and ssnr == False:
-                h = val_in + noise
-            elif noise_in == True and ssnr == True:
-                h = ssnr_ratio * val_in + (1 - ssnr_ratio) * noise
+                    target = target[idx]
+                    h = x[idx]
+            elif ssnr:
+                # If ssnr = True and train = False the input is corrupted by adding a "gray" image
+                h = ssnr_ratio * x + (1 - ssnr_ratio) * noise
+            elif not noise_in:
+                # If train = False and noise_in = False we have the usual test accuracy
+                h = x
+            elif noise_in:
+                # If train = False and noise_in = True we have the test accuracy under noisy input
+                h = x + noise
+
 
             for link in range(len(self) - 1):
                 if hasattr(self[link], 'W'):
-                    # h = F.relu(self[link](h))
                     h = activation(self[link](h, train = train))
                 else:
                     h = self[link](h)
-            h = self[link + 1](h, train = train)
+            h = self[link + 1](h, train = train) # If train = True it orthogonalizes the weights and we can take the gradients of the weights
 
-            return F.accuracy(h, val_out).array
+            return F.accuracy(h, target).array
 
     def emp_prob(self, x, target, sd, samples = 100, dist = 'Normal', radius = 0.3):
-        # Using no_backprop_mode method since it is just required to forward the input through the network, and not to build a computational graph to apply the backprop
-        with no_backprop_mode():
+        """ Obtains a sample estimate of probability of correct classification
+
+        Args:
+            x: array of inputs subject to classification
+            target: array of target classes
+            sd: standard deviation of the isotropic Gaussian noise to be added to the input
+            samples: number of samples to be takes for the estimate
+            dist: isotropic distribution to be used. Can be either 'Normal' or 'Uniform'
+            radius: for the case of 'Uniform', radius is half the interval
+
+        Returns: the fraction of samples correctly classified
+
+        """
+        with no_backprop_mode(): # Using no_backprop_mode method since it is just required to forward the input through the network, and not to build a computational graph to apply the backprop
             count_vec = self.xp.zeros(len(target))
             for _ in range(samples):
                 noise = self.noise_inj(x, sd, dist, radius)
@@ -198,6 +194,21 @@ class FeedForwardNN(chainer.ChainList):
             return count_vec/samples
 
     def sample_mean_margin(self, x, target, sd, samples = 100, dist='Normal', radius=0.3):
+        """ Obtains a sample estimate of the mean margin, i.e., the smoothed margin
+
+        Args:
+            x: array of inputs subject to classification
+            target: array of target classes
+            sd: standard deviation of the isotropic Gaussian noise to be added to the input
+            samples: number of samples to be takes for the estimate
+            dist: isotropic distribution to be used. Can be either 'Normal' or 'Uniform'
+            radius: for the case of 'Uniform', radius is half the interval
+
+        Returns:
+            margin sample mean
+            sample margin variance
+
+        """
         # Using no_backprop_mode method since it is just required to forward the input through the network, and not to build a computational graph to apply the backprop
         idx_aux = self.xp.arange(len(target))
         not_c_mat = self.xp.zeros((len(target),10), dtype='bool')
@@ -228,96 +239,81 @@ class FeedForwardNN(chainer.ChainList):
 
             return (mean_c - mean_max_notc) / samples, ((mean_sq_c / samples - (mean_c / samples) ** 2) + (mean_sq_max_notc / samples - (mean_sq_max_notc / samples) ** 2)) * samples / (samples - 1)
 
-    def out_sampling(self, x, sd, samples = 1000, dist = 'Normal'):
-        with no_backprop_mode():
-            h_samples = []
+    def projected_gradient_descent(self, x, target, num_steps, step_size, step_norm, eps, eps_norm,
+                                   clamp=(0,1), y_target=None, loss_func = 'crossentropy', x_var = 0, pert_scale = 1, cw_cut = 0):
+        """ Performs the projected gradient descent (PGD) attack on a batch of images
+        It carries the PGD attack given a specified number of steps, step norm, attack radius norm, and loss function. Other arguments are described bellow.
+        The function accepts three different kinds of losses, but "CW" is the one used for all experiments from the paper
+        Args:
+            x: array of inputs subject to classification
+            target: array of target classes
+            num_steps: number of steps taken during PGD
+            step_size: scaling factor of the adversarial vector to be added to the input
+            step_norm: the norm of the PGD attack 'sign', 'inf' and '2'. Note: this is the conjugate norm, i.e., if the attack is in the linf-ball then step norm is 'sign' (1-norm), if the attack is in the l2-ball then '2', if in the l1-ball then 'inf'
+            eps: the radius of the lp-ball
+            eps_norm: the norm p of the lp-ball
+            clamp: the total input space
+            y_target: in case of targeted attacks, i.e., instead of increasing the maximal incorrect output it maximizes the target
+            loss_func: loss function to be used for the attacks, either 'crossentropy' for SCE, 'CW' for Carlini and Wagner loss, or 'sm' for the smoothed margin
+            x_var: variance to be used in case of the 'sm' loss
+            pert_scale: the scale of the randomness of the initial 'x_0' around the input. If 0 then all the attacks start exactly at 'x', if 1 then the initial point is drawn uniformly inside of a Uniform cube around the input with same radius as the attack
+            cw_cut: the cut to be used for the 'CW' loss
 
-            for _ in range(samples):
-                h = x + self.noise_inj(x, sd, dist)
+        Returns: a self.xp ndarray with same shape as the input containing the adversarial examples computed with PGD
 
-                for link in range(len(self) - 1):
-                    if hasattr(self[link], 'W'):
-                        h = activation(self[link](h))
-                    else:
-                        h = self[link](h)
-
-                h = self[link + 1](h)
-                h_samples.append(h.array.T)
-            return h_samples
-
-    def projected_gradient_descent(self, x, y, num_steps, step_size, step_norm, eps, eps_norm,
-                                   clamp=(0,1), y_target=None, loss_func = 'crossentropy', layer = None, x_var = 0, pert_scale = 1, cw_cut = 0):
-        """Performs the projected gradient descent attack on a batch of images."""
+        """
         x_adv = Variable(self.xp.copy(x.array))
         targeted = y_target is not None
-        num_channels = x.shape[1]
         delta_x = self.xp.random.uniform(-eps*pert_scale, eps*pert_scale, x_adv.array.shape).astype('float32')
         x_adv = Variable(self.xp.clip(x_adv.array + delta_x, a_max = clamp[1], a_min = clamp[0]))
-        for i in range(num_steps):
+        for _ in range(num_steps):
             self.cleargrads()
             _x_adv = Variable(x_adv.array)
             if loss_func == 'crossentropy':
-                loss = losses.sce(self(_x_adv, train = False), y_target if targeted else y)
+                loss = losses.sce(self(_x_adv, train = False), y_target if targeted else target)
             elif loss_func == 'CW':
-                loss = losses.cw_loss(self(_x_adv, train = False), y, cut = cw_cut)
-            elif loss_func == 'snmse':
-                if layer is None or layer == 0 or layer > self.n_hl + 1:
-                    raise RuntimeError('Please choose the layer to calculate snmse from 1 to L+1, where L is the # of hidden layers')
-                h_clean, mean_s, var_s, mean_h, var_h = self.moment_propagation(layer, _x_adv, x_var, x.array, clean_actv = True)
-                loss = F.sum(losses.snmse(mean_s, var_s, h_clean.array))
-            elif loss_func == 'smape':
-                if layer is None or layer == 0 or layer > self.n_hl + 1:
-                    raise RuntimeError('Please choose the layer to calculate smape from 1 to L+1, where L is the # of hidden layers')
-                h_clean, mean_s, var_s, mean_h, var_h = self.moment_propagation(layer, _x_adv, x_var, x.array, clean_actv = True)
-                loss = F.sum(losses.smape(mean_s, var_s, h_clean.array))
-            elif loss_func == "SCW":
-                _, mean_s, var_s, mean_h, var_h = self.moment_propagation(len(self), _x_adv, x_var, x.array)
-                loss = losses.scw1_loss(mean_s, var_s, y)
-            elif loss_func == "sm1":
-                _, mean_s, var_s, mean_h, var_h = self.moment_propagation(len(self), _x_adv, x_var, x.array)
-                loss = losses.sm1_loss(mean_s, var_s, y)
-            elif loss_func == "sm2":
-                _, mean_s, var_s, mean_h, var_h = self.moment_propagation(len(self), _x_adv, x_var, x.array)
-                loss = losses.sm2_loss(mean_s, var_s, y)
+                loss = losses.cw_loss(self(_x_adv, train = False), target, cut = cw_cut)
+            elif loss_func == "sm":
+                _, mean_s, var_s, mean_h, var_h = self.moment_propagation(len(self), _x_adv, x_var)
+                loss = losses.sm_loss(mean_s, var_s, target)
 
             loss.backward()
 
             with no_backprop_mode():
-                # Force the gradient step to be a fixed size in a certain norm
+                # Forces the gradient step to be at most a fixed size in a specified norm step_norm
                 if step_norm == 'sign':
-                    ### This calculates the gradient of FGSM
-                    gradients = self.xp.sign(_x_adv.grad/len(y)) * step_size
+                    ### Calculates the gradient for attacks with l_inf ball attacks, i.e., FGSM
+                    gradients = self.xp.sign(_x_adv.grad/len(target)) * step_size
                 elif step_norm == 'inf':
-                    ### The projection l-inf normalization is
-                    linf_norm_pos = np.linalg.norm(cuda.to_cpu(_x_adv.grad[:, 0:self.n_in]/len(y)), ord = np.inf, axis = 1) > 0
-                    max_idx = _x_adv.grad[:, 0:self.n_in].argmax(axis=1)/len(y)
-                    max_mat = cuda.to_cpu(self.xp.zeros_like(_x_adv.grad[:, 0:self.n_in]/len(y), dtype = 'bool'))
+                    ### Calculates the gradient for attacks with l_1 ball attacks
+                    linf_norm_pos = np.linalg.norm(cuda.to_cpu(_x_adv.grad[:, 0:self.n_in]/len(target)), ord = np.inf, axis = 1) > 0
+                    max_idx = _x_adv.grad[:, 0:self.n_in].argmax(axis=1)/len(target)
+                    max_mat = cuda.to_cpu(self.xp.zeros_like(_x_adv.grad[:, 0:self.n_in]/len(target), dtype = 'bool'))
                     max_mat[linf_norm_pos,cuda.to_cpu(max_idx[linf_norm_pos]).tolist()] = True
-                    gradients = self.xp.clip(_x_adv.grad[:, 0:self.n_in]/len(y), a_min = -1, a_max = +1) ## projection to 1-radius l-inf ball
+                    gradients = self.xp.clip(_x_adv.grad[:, 0:self.n_in]/len(target), a_min = -1, a_max = +1) ## projection to 1-radius l-inf ball
                     gradients[max_mat] = self.xp.sign(gradients[max_mat])  ## if inside the l-inf ball, projection onto the 1-radius l-inf sphere
                     gradients *=  step_size ## scale according to step size
                 elif step_norm == '2':
-                    grad_norm = self.xp.linalg.norm(_x_adv.grad[:, 0:self.n_in]/len(y), ord = 2, axis = 1).reshape((-1,1))
+                    ### Calculates the gradient for attacks with l_2 ball attacks
+                    grad_norm = self.xp.linalg.norm(_x_adv.grad[:, 0:self.n_in]/len(target), ord = 2, axis = 1).reshape((-1,1))
                     non_zero_idx = grad_norm != 0
-                    indices = cp.arange(len(y)).reshape((-1,1))
-                    gradients = (_x_adv.grad/len(y)) * step_size
+                    indices = cp.arange(len(target)).reshape((-1,1))
+                    gradients = (_x_adv.grad/len(target)) * step_size
                     gradients[indices[non_zero_idx],:] = gradients[indices[non_zero_idx],:]/grad_norm[non_zero_idx].reshape((-1,1))
 
                 if targeted:
-                    # Targeted: Gradient descent with on the loss of the (incorrect) target label w.r.t. the image data
+                    # Targeted attack: Gradient descent with on the loss of the (incorrect) target label w.r.t. the image data
                     x_adv.array[:, 0:self.n_in] -= gradients[:, 0:self.n_in]
                 else:
-                    # Untargeted: Gradient ascent on the loss of the correct label w.r.t. the model parameters
+                    # Untargeted attack: Gradient ascent on the loss of the correct label w.r.t. the model parameters
                     x_adv.array[:, 0:self.n_in] += gradients[:, 0:self.n_in]
 
             # Project back into l_norm ball and correct range
             if eps_norm == 'inf':
-                # Workaround as PyTorch doesn't have elementwise clip
                 x_adv.array[:, 0:self.n_in] = self.xp.clip(x_adv.array[:, 0:self.n_in], a_max = x.array[:, 0:self.n_in] + eps, a_min = x.array[:, 0:self.n_in] - eps)
             elif eps_norm == '2':
                 delta = x_adv.array - x.array
-                # Assume x and x_adv are batched tensors where the first dimension is
-                # a batch dimension
+                # Assume x and x_adv are batched tensors where the first dimension is a batch dimension
                 scaling_factor = self.xp.clip(self.xp.linalg.norm(delta.reshape((delta.shape[0], -1)), ord = 2, axis=1), a_min = eps)
                 delta *= eps / scaling_factor.reshape((-1, 1))
                 x_adv.array = x.array + delta
@@ -325,17 +321,34 @@ class FeedForwardNN(chainer.ChainList):
 
         return x_adv.array
 
-    def moment_propagation(self, layer, x_m, x_var, x_clean, w_grad = False, ortho_ws = True, clean_actv = False):
-        h_clean = x_clean
+    def moment_propagation(self, layer, x_m, x_var, w_grad = False, ortho_ws = True, clean_actv = False):
+        """ Carries the moment propagation
+
+        Args:
+            layer: the layer until which the moment propagation should be carried (in general the layer should be the output)
+            x_m: the mean input, which for the case of isotropic Gaussian input is the 'clean' input
+            x_var: the variance of the input Gaussian noise
+            w_grad: whether the gradients w.r.t. the weights should be stored. Needed when calling it during training
+            ortho_ws: whether Bjorck orthogonalization should be carried
+            clean_actv: whether the layer's 'clean' (zero-variance) activation should be stored. For non-linear NNs in general the mean layer activation is different to the 'clean' layer activation. By returning the clean and mean activation you can measure how much each layer deviates under noise
+
+        Returns:
+            activation for input with zero-variance ("clean input") of specified hidden layer
+            mean of specified layer's pre-activation
+            variance of specified layer's pre-activation
+            mean of specified hidden layer
+            variance of specified hidden layer
+        """
+        h_clean = x_m.array
         h_v = self.xp.ones_like(x_m.array)*x_var
 
         # for link in range(len(self) - 1):
         for link in range(layer):
             if hasattr(self[link], 'W'):
                 if self[link].layer_num == 0:
-                    mean_s, var_s, h_m, h_v = self[link].relu_moment_propagation(x_m, h_v, ortho_ws = ortho_ws, w_grad = w_grad)
+                    mean_s, var_s, h_m, h_v = self[link].relu_moment_propagation(x_m, h_v, w_grad = w_grad)
                 else:
-                    mean_s, var_s, h_m, h_v = self[link].relu_moment_propagation(h_m, h_v, ortho_ws = ortho_ws, w_grad = w_grad)
+                    mean_s, var_s, h_m, h_v = self[link].relu_moment_propagation(h_m, h_v, w_grad = w_grad)
 
                 if clean_actv:
                     if link+1 != len(self):

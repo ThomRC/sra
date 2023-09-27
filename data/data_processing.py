@@ -5,6 +5,7 @@ from chainer import cuda
 from sklearn.datasets import fetch_openml
 
 def normalize(x, axis):
+    """ Function to normalize the image dataset. Each pixel is subtracted by the same pixel mean and divided by the standard deviation"""
     x_m = cp.mean(x, axis = axis)
     x_std = cp.std(x, axis = axis)
     if axis == 0:
@@ -16,20 +17,43 @@ def normalize(x, axis):
     return norm_x
 
 def mnist_preprocessing(train_data = 60000, test_data = 10000, intvl_data = 2., in_center = 1., tr_idx = None, te_idx = None, norm = False):
-    dataset_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
-    while curr_fold != "sra-paper":
-        dataset_dir, curr_fold = os.path.split(curr_path)
+    """ Iniotializes the MNIST dataset
 
+    Args:
+        train_data: size of training data to be used (<= 60000)
+        test_data: size of test data to be used ( <= 10000 + 60000 - train_data)
+        intvl_data: range of each pixel (e.g., = 2 each pixel can be in the ranges [-1,1] or [0,2])
+        in_center: center of the range of each pixel (e.g., if intvl_data = 2 and in_center = 0 range is [-1,1], if intvl_data = 1 and in_center = 1 range is [0.5,1.5],
+        tr_idx: when loading a NN this argument is used to use exactly the same training data
+        te_idx: when loading a NN this argument is used to use exactly the same test data
+        norm:
+
+    Returns:
+        training input
+        training output
+        test input
+        test output
+        indices of training data
+        indices of test data
+
+    """
+    # Goes to sra folder
+    dataset_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
+    while curr_fold != "sra":
+        dataset_dir, curr_fold = os.path.split(dataset_dir)
+
+    # Checks if the dataset subfolders exist. If not it creates it
     in_data_dir = dataset_dir + "/datasets/dataset_MNIST/mnist_preprocessed_data_{}_{}.npy".format(intvl_data,in_center)
     out_data_dir = dataset_dir + "/datasets/dataset_MNIST/mnist_preprocessed_target_{}_{}.npy".format(intvl_data, in_center)
-    if os.path.exists(os.path.dirname(in_data_dir)) == False:
+    if not os.path.exists(os.path.dirname(in_data_dir)):
         try:
             original_umask = os.umask(0)
-            os.makedirs(os.path.dirname(in_data_dir), mode=0o770)
+            os.makedirs(os.path.dirname(in_data_dir))
         finally:
             os.umask(original_umask)
-    print(in_data_dir)
-    if os.path.exists(in_data_dir) == False:
+
+    # Checks if the dataset files exist. If not it creates it downloads it using fetch_openml
+    if not os.path.exists(in_data_dir):
         mnist = fetch_openml('mnist_784',as_frame=False)
         x = cuda.to_gpu(mnist['data'][:]).astype('float32') / (255. / intvl_data) - (intvl_data / 2) + in_center
         print(in_data_dir)
@@ -41,34 +65,58 @@ def mnist_preprocessing(train_data = 60000, test_data = 10000, intvl_data = 2., 
     y = cp.load(out_data_dir)
 
     if norm:
+        # Normalizes the input data
         x = normalize(x, axis = 0)
         print("Input successfully normalized")
 
     if tr_idx is None or te_idx is None:
+        # When training a dataset the indices of training and test data doesn't matter, so it creates the indices here
+        print("Dataset file to be loaded:")
+        print(in_data_dir)
         tr_idx = np.arange(train_data).astype('int32') #int16 = 65536 integers
         te_idx = np.arange(70000 - cuda.to_cpu(test_data), 70000).astype('int32')
 
+    # Loads training data and test data from the indices
     tr_x, te_x = x[tr_idx], x[te_idx]
     tr_y, te_y = y[tr_idx], y[te_idx]
     return tr_x,te_x,tr_y,te_y, tr_idx, te_idx
 
 def cifar10_preprocessing(train_data = 50000, test_data = 10000, intvl_data = 4., in_center = 0., tr_idx = None, norm = False):
+    """ Initializes the Cifar 10 dataset
+
+    Args:
+        train_data: size of training data to be used (<= 60000)
+        test_data: size of test data to be used ( <= 10000 + 60000 - train_data)
+        intvl_data: range of each pixel (e.g., = 2 each pixel can be in the ranges [-1,1] or [0,2])
+        in_center: center of the range of each pixel (e.g., if intvl_data = 2 and in_center = 0 range is [-1,1], if intvl_data = 1 and in_center = 1 range is [0.5,1.5],
+        tr_idx: when loading a NN this argument is used to use exactly the same training data
+        te_idx: when loading a NN this argument is used to use exactly the same test data
+        norm:
+
+    Returns:
+        training input
+        training output
+        test input
+        test output
+        indices of training data
+        indices of test data
+
+    """
     train_data = np.minimum(50000, train_data)
     dataset_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
-    while curr_fold != "sra-paper":
-        dataset_dir, curr_fold = os.path.split(curr_path)
+    while curr_fold != "sra":
+        dataset_dir, curr_fold = os.path.split(dataset_dir)
 
     in_data_dir = dataset_dir + "/datasets/dataset_cifar10/cifar10_preprocessed_data_{}_{}.npy".format(intvl_data, in_center)
     out_data_dir = dataset_dir + "/datasets/dataset_cifar10/cifar10_preprocessed_target_{}_{}.npy".format(intvl_data, in_center)
-    if os.path.exists(os.path.dirname(in_data_dir)) == False:
+    if not os.path.exists(os.path.dirname(in_data_dir)):
         try:
             original_umask = os.umask(0)
-            os.makedirs(os.path.dirname(in_data_dir), mode=0o770)
+            os.makedirs(os.path.dirname(in_data_dir))
         finally:
             os.umask(original_umask)
 
-    print(in_data_dir)
-    if os.path.exists(in_data_dir) == False:
+    if not os.path.exists(in_data_dir):
         in_data = np.zeros((60000,3072))
         out_data = np.zeros((60000))
         a = datasets.get_cifar10(ndim = 1)
@@ -95,6 +143,8 @@ def cifar10_preprocessing(train_data = 50000, test_data = 10000, intvl_data = 4.
         print("Input successfully normalized")
 
     if tr_idx is None:
+        print("Dataset file to be loaded:")
+        print(in_data_dir)
         tr_idx = cp.random.choice(50000, train_data, replace=False)
 
     tr_x, te_x = x[tr_idx,:], x[50000:60000,:]
@@ -104,21 +154,41 @@ def cifar10_preprocessing(train_data = 50000, test_data = 10000, intvl_data = 4.
     return tr_x,te_x,tr_y,te_y, tr_idx, te_idx
 
 def cifar100_preprocessing(train_data = 50000, test_data = 10000, intvl_data = 4., in_center = 0., tr_idx = None, norm = False):
+    """ Initializes the Cifar 100 dataset
+
+    Args:
+        train_data: size of training data to be used (<= 60000)
+        test_data: size of test data to be used ( <= 10000 + 60000 - train_data)
+        intvl_data: range of each pixel (e.g., = 2 each pixel can be in the ranges [-1,1] or [0,2])
+        in_center: center of the range of each pixel (e.g., if intvl_data = 2 and in_center = 0 range is [-1,1], if intvl_data = 1 and in_center = 1 range is [0.5,1.5],
+        tr_idx: when loading a NN this argument is used to use exactly the same training data
+        te_idx: when loading a NN this argument is used to use exactly the same test data
+        norm:
+
+    Returns:
+        training input
+        training output
+        test input
+        test output
+        indices of training data
+        indices of test data
+
+    """
     train_data = np.minimum(50000, train_data)
     dataset_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
-    while curr_fold != "sra-paper":
-        dataset_dir, curr_fold = os.path.split(curr_path)
+    while curr_fold != "sra":
+        dataset_dir, curr_fold = os.path.split(dataset_dir)
 
     in_data_dir = dataset_dir + "/datasets/dataset_cifar100/cifar100_preprocessed_data_{}_{}.npy".format(intvl_data, in_center)
     out_data_dir = dataset_dir + "/datasets/dataset_cifar100/cifar100_preprocessed_target_{}_{}.npy".format(intvl_data, in_center)
-    if os.path.exists(os.path.dirname(in_data_dir)) == False:
+    if not os.path.exists(os.path.dirname(in_data_dir)):
         try:
             original_umask = os.umask(0)
-            os.makedirs(os.path.dirname(in_data_dir), mode=0o770)
+            os.makedirs(os.path.dirname(in_data_dir))
         finally:
             os.umask(original_umask)
-    print(in_data_dir)
-    if os.path.exists(in_data_dir) == False:
+
+    if not os.path.exists(in_data_dir):
         in_data = np.zeros((60000,3072))
         out_data = np.zeros((60000))
         a = datasets.get_cifar100(ndim = 1)
@@ -145,6 +215,8 @@ def cifar100_preprocessing(train_data = 50000, test_data = 10000, intvl_data = 4
         print("Input successfully normalized")
 
     if tr_idx is None:
+        print("Dataset file to be loaded:")
+        print(in_data_dir)
         tr_idx = cp.random.choice(50000, train_data, replace=False)
 
     tr_x, te_x = x[tr_idx,:], x[50000:60000,:]
