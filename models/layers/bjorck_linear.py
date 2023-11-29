@@ -12,6 +12,7 @@ class BjorckLinear(DenseLinear, Adam):
         Adam.__init__(self, **kwargs)
         self._set_config(config)
         self.layer_num = layer_num
+        self.activation = kwargs['activation']
         self.ortho_w = None
         self.iter = config['iter']
         self.dynamic_iter = config['dynamic_iter']

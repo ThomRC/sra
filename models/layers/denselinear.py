@@ -78,3 +78,33 @@ class DenseLinear(link.Link):
         h_m, h_v = relu_moments(mean_s, var_s)
 
         return mean_s, var_s, h_m, h_v
+
+    def oplu_moment_propagation(self, x_m, x_v, x_cv, w_grad=False):
+        """ Computes the pre-activation's mean and variance vectors and calls the relu_moments function
+
+        Args:
+            x_m: previous layer's mean vector
+            x_v: previous layer's variance vector (we assume independent activations, i.e., zero covariances
+            w_grad: boolean telling whether the gradients are needed or not
+
+        Returns:
+
+        """
+        if self.W.array is None:
+            in_size = utils.size_of_shape(x.shape[n_batch_axes:])
+            self._initialize_params(in_size)
+
+        if w_grad:
+            self.orthonormalize()  # carries orthonormalization only in the case of needing the W gradients
+            W = self.ortho_w
+        else:
+            W = self.ortho_w.array
+
+        mean_s = F.linear(x_m, W)
+        cov_mat = mat1['{}'.format(units)] * x_v + mat2['{}'.format(units)] * x_cv
+        var_s = F.diagonal(W @ cov_mat @ W.T) # CHECK LATER
+        # var_s = F.linear(x_v, W**2) + F.linear(x_cv, W*(W @ mat2['{}'.format(units)]))
+
+        h_m, h_v, h_cv = oplu_moments(mean_s, var_s)
+
+        return mean_s, var_s, h_m, h_v, h_cv

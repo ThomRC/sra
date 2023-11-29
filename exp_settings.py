@@ -6,6 +6,8 @@ import os
 from chainer import initializers
 import cupy as cp
 
+from utils.matrices import oplu_moments_mat
+
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"  # In case the GPU order in the bus is different from the one listed by CUDA
 
 def settings():
@@ -51,6 +53,7 @@ def settings():
     fc_hl_units = [units, units, units]
     # fc_hl_units = [units, units, units, units, units, units]
     # IN CASE OF EACH LAYER HAVING DIFFERENT # OF UNITS PLEASE CHANGE IT HERE MANUALLY
+    activation = 'relu' # 'relu' or 'oplu'
 
     nobias = True  # OV: True
     initial_bias = None  # OV: None
@@ -62,6 +65,11 @@ def settings():
     for i in fc_hl_units:
         arch += str(i) + 'x'
     arch = arch[0:-1]
+
+    arch = arch + '_' + activation
+    if activation == 'oplu':
+        oplu_moments_mat(fc_hl_units)
+
     # /ARCHITECTURE SETTINGS
     ############################################################################
     curr_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
@@ -121,7 +129,7 @@ def settings():
                   'in_padding': in_padding, 'fc_hl': fc_hl, 'fc_hl_units': fc_hl_units, 'in_interval': in_interval,
                   'in_center': in_center, 'n_exp': n_exp, 'n_epoch': n_epoch, 'save_data': save_data,
                   'save_net': save_net, 'net_save_dir': net_save_dir, 'batch_size': batch_size}
-    kwargs_model = {'arch': arch, 'ortho_ws': ortho_ws, 'loss': loss, 'x_var': x_var, 'd': d, 'init': init,
+    kwargs_model = {'arch': arch, 'activation': activation, 'ortho_ws': ortho_ws, 'loss': loss, 'x_var': x_var, 'd': d, 'init': init,
                     'nobias': nobias, 'initial_w': initializer, 'initial_bias': initial_bias, 'lr': lr,
                     'beta1': adam_beta1, 'beta2': adam_beta2, 'schedule': schedule, 'bjorck_config': bjorck_config}
     kwargs = {**kwargs_exp, **kwargs_model}

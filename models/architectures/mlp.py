@@ -346,9 +346,16 @@ class FeedForwardNN(chainer.ChainList):
         for link in range(layer):
             if hasattr(self[link], 'W'):
                 if self[link].layer_num == 0:
-                    mean_s, var_s, h_m, h_v = self[link].relu_moment_propagation(x_m, h_v, w_grad = w_grad)
+                    if self[link].activation == 'relu':
+                        mean_s, var_s, h_m, h_v = self[link].relu_moment_propagation(x_m, h_v, w_grad = w_grad)
+                    elif self[link].activation == 'oplu':
+                        h_cv = cp.zeros_like(h_v)
+                        mean_s, var_s, h_m, h_v, h_cv = self[link].oplu_moment_propagation(x_m, h_v, h_cv, w_grad=w_grad)
                 else:
-                    mean_s, var_s, h_m, h_v = self[link].relu_moment_propagation(h_m, h_v, w_grad = w_grad)
+                    if self[link].activation == 'relu':
+                        mean_s, var_s, h_m, h_v = self[link].relu_moment_propagation(h_m, h_v, w_grad = w_grad)
+                    elif self[link].activation == 'oplu':
+                        mean_s, var_s, h_m, h_v, h_cv = self[link].oplu_moment_propagation(h_m, h_v, h_cv, w_grad=w_grad)
 
                 if clean_actv:
                     if link+1 != len(self):
