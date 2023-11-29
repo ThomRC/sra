@@ -1,17 +1,24 @@
 #!/usr/bin/env python
 # coding: utf-8
-from chainer import Variable, initializers
-import cupy as cp
+import warnings
+warnings.filterwarnings("ignore")
+
 import sys
 import os
 import datetime
 import pickle
 import io
 import re
+import code
+
+from chainer import Variable, initializers
+import cupy as cp
+
 from exp_settings import settings
 import trainers.trainer as trainer
-import measurements.performance.robustness as robustness
-os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+import measurements.robustness as robustness
+
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID" # In case the GPU order in the bus is different from the one listed by CUDA
 
 def change_gpu(model, gpu):
     """ Used in case the saved net was in a different GPU from the one used when loading
@@ -72,11 +79,11 @@ def experiment_routine(**kwargs):
     curr_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
 
     if kwargs['bjorck_config']['iter'] == 0:
-        dest_dir = curr_dir + "/experiments/{}/no_ortho/loss_{}/{}/init_{}/reg_{}/{}/{}_tr/{}/".format(
-        kwargs['dataset'], kwargs['loss'], arch, kwargs['init'], kwargs['reg'], in_str, kwargs['tr_size'], date)
+        dest_dir = curr_dir + "/trainings/{}/{}/no_ortho/loss_{}/init_{}/{}/{}_tr/{}/".format(
+        kwargs['dataset'], arch, kwargs['loss'], kwargs['init'], in_str, kwargs['tr_size'], date)
     else:
-        dest_dir = curr_dir + "/experiments/{}/ortho/loss_{}/{}/init_{}/reg_{}/{}/{}_tr/{}/".format(
-        kwargs['dataset'], kwargs['loss'], arch, kwargs['init'], kwargs['reg'], in_str, kwargs['tr_size'], date)
+        dest_dir = curr_dir + "/trainings/{}/{}/ortho/loss_{}/init_{}/{}/{}_tr/{}/".format(
+        kwargs['dataset'], arch, kwargs['loss'], kwargs['init'], in_str, kwargs['tr_size'], date)
     print("Destination folder \n{}".format(dest_dir))
 
     j = 0
@@ -86,19 +93,13 @@ def experiment_routine(**kwargs):
     while success < n_exp:
         # Sets the name of the destination folder for current training with the main training settings
         exp_name = "loss_{}_ep_{}_lr_{}_x_var_{}_d_{}_{}".format(kwargs['loss'], kwargs['n_epoch'], kwargs['lr'], kwargs['x_var'], kwargs['d'], j)
-        # Changes the number tag of destination folder until a number that wasn't used
+        # Changes the number tag of destination folder until a number that wasn'target used
         while os.path.exists(dest_dir + exp_name):
             j += 1
             exp_name = "loss_{}_ep_{}_lr_{}_x_var_{}_d_{}_{}".format(kwargs['loss'], kwargs['n_epoch'], kwargs['lr'],  kwargs['x_var'], kwargs['d'], j)
 
         data_save_dir = dest_dir + exp_name
-
-        if kwargs['save_data']:
-            try:
-                original_umask = os.umask(0)
-                os.makedirs(data_save_dir, mode=0o770)
-            finally:
-                os.umask(original_umask)
+        os.makedirs(data_save_dir)
 
         kwargs_train = {'exp_count': success + fail, 'success': success, 'data_save_dir': data_save_dir}
         kwargs = {**kwargs, **kwargs_train}
@@ -128,52 +129,55 @@ def build_net(**kwargs):
 
 if __name__ == '__main__':
     if not sys.argv[5]:
-        raise RuntimeError('Four arguments required: \n'
+        raise RuntimeError('Five arguments required: \n'
                            'loss: loss functions to be used \n'
                            'd: margin enforcement hyperparameter \n'
                            'x_var: variance of input Gaussian noise \n'
-                           'Mode: \'train\' or \'load\' \n'
+                           'Mode: \'train\' or \'load\' or \'load_all\' \n'
                            'gpu: number of gpu to be used')
     else:
-        gpu = sys.argv[5]
-    cp.cuda.Device(gpu).use()
+        loss = sys.argv[1].lower()
+        d = float(sys.argv[2])
+        x_var = float(sys.argv[3])
+        mode = sys.argv[4].lower()
+        gpu = int(sys.argv[5])
 
+    cp.cuda.Device(gpu).use()
+    d = cp.asarray(d, dtype=cp.float32)
+    x_var = cp.asarray(x_var, dtype=cp.float32)
+    
     while True:
-        mode, kwargs = settings(gpu)
+        mode, kwargs = settings()
         if mode == 'train':
+            print('### You entered training mode')
             args = experiment_routine(**kwargs)
             sys.exit("Exiting training")
-            while True:
-                aux = input('Do you want to leave? [y] Yes [n] No\n')
-                if aux == 'y' or aux == 'Y':
-                    sys.exit("Exiting training")
 
-        elif mode == 'load':
+        elif mode == 'load' or mode == 'load_all':
+            print('### You entered load mode. In this mode the robustness measurements will be carried for the specified trained NN')
             # Load trained nets from trained nets folder for specified dataset and architecture file so that the
             # robustness and performance metrics can be computed
             aux = 0
-            while aux != 'y' or aux != 'Y':
+            while True:
                 aux = input('Are the dataset {} and architecture {} correct? [y] Yes [n] No\n'.format(kwargs['dataset'], kwargs['arch']))
-                if aux == 'n' or aux == 'N':
+                if aux.lower() == 'n':
                     sys.exit("Exiting loading. Please input the correct dataset and architecture in \n'exp_settings.py\n'")
+                elif aux.lower() == 'y':
+                    break
 
             while True:
                 curr_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
                 print(curr_dir)
                 print(curr_fold)
                 measures_save_dir = curr_dir + "/measurements/{}/".format(kwargs['dataset']) + "{}/".format(kwargs['arch'])
+                if not os.path.isdir(measures_save_dir[0:-1]):
+                    os.makedirs(measures_save_dir[0:-1])
 
-                try:
-                    original_umask = os.umask(0)
-                    os.makedirs(measures_save_dir, mode=0o770)
-                finally:
-                    os.umask(original_umask)
-
-                filelist = robustness.list_nets(kwargs['net_save_dir'])
+                filelist = robustness.list_nets(kwargs['net_save_dir'], loss = loss, d = d, x_var = x_var, load_mode = mode)
                 print(filelist)
                 # loops through all files in the .csv file
                 for file in filelist:
-                    net_path = kwargs['net_save_dir'] + file
+                    net_path = file
                     print(kwargs['net_save_dir'])
                     print(measures_save_dir)
                     kwargs_load = {'exp_count': None, 'success': None, 'data_save_dir': None}
@@ -193,14 +197,15 @@ if __name__ == '__main__':
                     target = Variable(network.te_y)
 
                     # Parses the trained NN settings type of loss, x_var, d, training epochs and training number from the file name
-                    loss = re.search('loss_(.*)_ep', net_path)
-                    epochs = re.search('_ep(.*)_x_var', net_path)
-                    result = re.search('x_var_(.*)_d', net_path)
-                    x_var = float(result.group(1))
-                    result = re.search('{}_d_(.*)_'.format(x_var), net_path)
-                    d = float(result.group(1))
+                    # code.interact(local=locals())
+                    loss = re.search('loss_(.*)_ep', net_path).group(1)
+                    epochs = re.search('_ep_(.*)_x_var', net_path).group(1)
+                    x_var = float(re.search('x_var_(.*)_d', net_path).group(1))
+                    d = float(re.search('{}_d_(.*)_'.format(x_var), net_path).group(1))
                     training_num = float(re.search('_d_{}_(.*)'.format(d), net_path).group(1))
                     arch = network.model.arch
+                    network.loss = loss
+                    network.epochs = epochs
                     network.x_var = x_var
                     network.d = d
                     network.model.intvl_in = network.intvl_in
@@ -214,4 +219,4 @@ if __name__ == '__main__':
                     # Performance and robustness measurements
                     robustness.measurements(network, x_m, target, measures_save_dir)
 
-                sys.exit("Exiting loading mode")
+                sys.exit("Finished the data collection of robustness measurements")

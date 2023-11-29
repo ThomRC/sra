@@ -15,83 +15,124 @@ def bjorck_orthonormalize(w, beta=0.5, iters=20, order=1):
     elif order == 1:
         for _ in range(iters):
             w = (1 + beta) * w - beta * F.matmul(w,F.matmul(w.T,w))
-
-    elif order == 2:
-        if beta != 0.5:
-            print("Bjorck orthonormalization with order more than 1 requires a beta of 0.5. ")
-            exit(-1)
-        for _ in range(iters):
-            w_t_w = F.matmul(w.T,w)
-            w_t_w_w_t_w = F.matmul(w_t_w,w_t_w)
-            w = (+ (15 / 8) * w
-                - (5 / 4) * F.matmul(w, w_t_w)
-                + (3 / 8) * F.matmul(w, w_t_w_w_t_w))
-
-    elif order == 3:
-        if beta != 0.5:
-            print("Bjorck orthonormalization with order more than 1 requires a beta of 0.5. ")
-            exit(-1)
-        for _ in range(iters):
-            w_t_w = F.matmul(w.T,w)
-            w_t_w_w_t_w = F.matmul(w_t_w,w_t_w)
-            w_t_w_w_t_w_w_t_w = F.matmul(w_t_w,w_t_w_w_t_w)
-            w = (+ (35 / 16) * w
-                 - (35 / 16) * F.matmul(w,w_t_w)
-                 + (21 / 16) * F.matmul(w,w_t_w_w_t_w)
-                 - (5 / 16) * F.matmul(w,w_t_w_w_t_w_w_t_w))
-
-    elif order == 4:
-        if beta != 0.5:
-            print("Bjorck orthonormalization with order more than 1 requires a beta of 0.5. ")
-            exit(-1)
-
-        for _ in range(iters):
-            w_t_w = F.matmul(w.T,w)
-            w_t_w_w_t_w = F.matmul(w_t_w,w_t_w)
-            w_t_w_w_t_w_w_t_w = F.matmul(w_t_w,w_t_w_w_t_w)
-            w_t_w_w_t_w_w_t_w_w_t_w = F.matmul(w_t_w,w_t_w_w_t_w_w_t_w)
-
-            w = (+ (315 / 128) * w
-                 - (105 / 32) * F.matmul(w,w_t_w)
-                 + (189 / 64) * F.matmul(w,w_t_w_w_t_w)
-                 - (45 / 32) * F.matmul(w,w_t_w_w_t_w_w_t_w)
-                 + (35 / 128) * F.matmul(w,w_t_w_w_t_w_w_t_w_w_t_w))
-
     else:
         print("The requested order for orthonormalization is not supported. ")
         exit(-1)
 
     return w
 
-def min_ortho_iter(w, beta=0.5, iters=30, order=1):
+def bjorck_orthonormalize_bcop(w, beta=0.5, iters=20, order=1):
+    """
+    Bjorck, Ake, and Clazett Bowie. "An iterative algorithm for computing the best estimate of an orthogonal matrix."
+    SIAM Journal on Numerical Analysis 8.2 (1971): 358-364.
+    """
+
+    if w.shape[-2] < w.shape[-1]:
+        return F.moveaxis(bjorck_orthonormalize(
+            F.moveaxis(w, -1, -2),
+            beta=beta, iters=iters, order=order,
+            power_iteration_scaling=power_iteration_scaling,
+            default_scaling=default_scaling),(
+            -1, -2))
+
+    assert order == 1, "only first order Bjorck is supported"
+    for _ in range(iters):
+        w = (1 + beta) * w - beta * w @ F.moveaxis(w, -1, -2) @ w
+
+    return w
+
+
+def min_ortho_iter(w, beta=0.5, iters=30, order=1, first = False):
+    """ Function that reduces the number of iterations required to still achieve a mean pairwise dot product between the weight matrix rows lower than 10**-8
+
+    Args:
+        w: weight matrix before the ortogonalization
+        beta: BO hyperparameter, original value used in all experiments is 0.5
+        iters: BO hyperparameter, original value used in all experiments is 30. This value changes during training using the current function
+        order: BO hyperparameter, original value used in all experiments is 1
+
+    Returns: the new number of iterations for the current layer
+
+    """
     scaling = get_safe_bjorck_scaling(w)
-    mean_dot = 0
+    mean_dot_offdiag = 0.
+    mean_dot_diag = 1.
     with no_backprop_mode():
-        while mean_dot <= 10**-8 and iters > 1:
+        eye = cp.identity(w.array.shape[0], dtype = 'bool')
+        not_eye = cp.logical_not(eye)
+        while mean_dot_offdiag <= 10**-8 and mean_dot_diag >= 0.99999999  and iters > 1:
             ortho_w = Variable(cp.copy(w.array / scaling.array))
             ortho_w.array = bjorck_orthonormalize(ortho_w.T,beta=beta,iters=iters,order=order).array.T
             aux = ortho_w.array@ortho_w.array.T
-            mean_dot = cp.mean(cp.absolute(aux[cp.logical_not(cp.identity(aux.shape[0], dtype = 'bool'))]))
+            mean_dot_offdiag = cp.mean(cp.absolute(aux[not_eye]))
+            mean_dot_diag = cp.mean(cp.absolute(aux[eye]))
             print(iters)
-            print("Mean pairwise dot: ", mean_dot)
+            print("Mean pairwise dot offdiag: ", mean_dot_offdiag)
+            print("Mean pairwise dot diag: ", mean_dot_diag)
             iters -= 1
 
         iters += 1
 
-        while mean_dot > 10**-8:
+        while mean_dot_offdiag > 10**-8 or mean_dot_diag < 0.99999999:
             ortho_w = Variable(cp.copy(w.array / scaling.array))
             ortho_w.array = bjorck_orthonormalize(ortho_w.T,beta=beta,iters=iters,order=order).array.T
             aux = ortho_w.array@ortho_w.array.T
-            mean_dot = cp.mean(cp.absolute(aux[cp.logical_not(cp.identity(aux.shape[0], dtype = 'bool'))]))
+            mean_dot_offdiag = cp.mean(cp.absolute(aux[not_eye]))
+            mean_dot_diag = cp.mean(cp.absolute(aux[eye]))
             print(iters)
-            print("Mean pairwise dot: ", mean_dot)
+            print("Mean pairwise dot offdiag: ", mean_dot_offdiag)
+            print("Mean pairwise dot diag: ", mean_dot_diag)
             iters += 1
 
-        iters -= 1
+        return iters
+        
+def min_ortho_iter_bcop(w, beta=0.5, iters=30, order=1, first = False):
+    """ Function that reduces the number of iterations required to still achieve a mean pairwise dot product between the weight matrix rows lower than 10**-8
+
+    Args:
+        w: weight matrix before the ortogonalization
+        beta: BO hyperparameter, original value used in all experiments is 0.5
+        iters: BO hyperparameter, original value used in all experiments is 30. This value changes during training using the current function
+        order: BO hyperparameter, original value used in all experiments is 1
+
+    Returns: the new number of iterations for the current layer
+
+    """
+    scaling = get_safe_bjorck_scaling(w)
+    mean_dot_offdiag = 0.
+    mean_dot_diag = 1.
+    with no_backprop_mode():
+        not_diag = cp.ones_like(w.array @ cp.moveaxis(w.array, -1, -2), dtype = 'bool')
+        not_diag[:,cp.arange(not_diag.shape[-1]),cp.arange(not_diag.shape[-1])] = False
+        diag = cp.logical_not(not_diag)
+        while mean_dot_offdiag <= 5*10**-8 and mean_dot_diag >= 0.99999995 and iters > 1:
+            ortho_w = Variable(cp.copy(w.array / scaling.array))
+            ortho_w.array = bjorck_orthonormalize_bcop(ortho_w,beta=beta,iters=iters,order=order).array
+            aux = ortho_w.array @ cp.moveaxis(ortho_w.array, -1, -2)
+            mean_dot_offdiag = cp.mean(cp.absolute(aux[not_diag]))
+            mean_dot_diag = cp.mean(cp.absolute(aux[diag]))
+            print(iters)
+            print("Mean pairwise dot offdiag: ", mean_dot_offdiag)
+            print("Mean pairwise dot diag: ", mean_dot_diag)
+            iters -= 1
+
+        iters += 1
+
+        while mean_dot_offdiag > 5*10**-8 or mean_dot_diag < 0.99999995:
+            ortho_w = Variable(cp.copy(w.array / scaling.array))
+            ortho_w.array = bjorck_orthonormalize_bcop(ortho_w,beta=beta,iters=iters,order=order).array
+            aux = ortho_w.array @ cp.moveaxis(ortho_w.array, -1, -2)
+            mean_dot_offdiag = cp.mean(cp.absolute(aux[not_diag]))
+            mean_dot_diag = cp.mean(cp.absolute(aux[diag]))        
+            print(iters)
+            print("Mean pairwise dot offdiag: ", mean_dot_offdiag)
+            print("Mean pairwise dot diag: ", mean_dot_diag)
+            iters += 1
 
         return iters
 
 def get_safe_bjorck_scaling(weight):
-    bjorck_scaling = chainer.Variable(cp.sqrt(weight.shape[0] * weight.shape[1]).astype(dtype=cp.float32))
+    """ Gets the current layer scaling factor to guarantee convergence for BO """
+    bjorck_scaling = chainer.Variable(cp.sqrt(weight.shape[-1] * weight.shape[-2]).astype(dtype=cp.float32))
 
     return bjorck_scaling
