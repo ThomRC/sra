@@ -183,6 +183,59 @@ class SmoothMargin(function_node.FunctionNode):
         gvar_ru = gvar_max
         return gmean_c, gmean_max, gvar_max, gmean_ru, gvar_ru
 
+# class RSloss(function_node.FunctionNode):
+
+#     """Rectified Linear Unit variance (i.e., Rectified normal distribution mean) class"""
+
+#     def check_type_forward(self, in_types):
+#         type_check._argname(in_types, ('out_c_m', 'out_max_m', 'out_max_v', 'out_ru_m', 'out_ru_v'))
+#         type_check.expect(
+#             in_types[0].dtype.kind == 'f',
+#             in_types[0].dtype == in_types[1].dtype,
+#             in_types[0].shape == in_types[1].shape
+#         )
+
+#     def forward_cpu(self, inputs):
+#         raise NotImplementedError()
+
+#     def forward_gpu(self, inputs):
+#         eps = 10**-14 # numerical stability constant
+#         self.retain_inputs((0, 1, 2, 3, 4))
+#         c_mean, max_mean, max_var, ru_mean, ru_var = inputs
+#         alpha = (max_mean - ru_mean)/(cp.sqrt(2 * (max_var + ru_var) + eps))
+#         aux = cp.sqrt((max_var+ru_var)/(2*cp.pi)) * cp.exp(-alpha**2) + ru_mean + (max_mean - ru_mean) * (1 + erf(alpha)) * 0.5
+#         sm = aux - c_mean
+        
+#         mean_s, var_s, target, d, *args, **kwargs):
+
+#         x_var = kwargs['x_var']
+#         eps = 10**-14
+#         idx_aux = cp.arange(len(target))
+#         aux =  cp.absolute(mean_s.array.max(1)) + cp.absolute(mean_s.array.min(1)) # maximum distance from the largest and smallest output
+#         aux2 = cp.zeros_like(mean_s.array)
+#         aux2[idx_aux,target.array] = aux
+#         not_tgt_mean_s = mean_s - aux2 # subtracts the correct class output by the maximum distance to make the correct output smaller than or equal to the smallest output
+#         not_tgt_max_idx = not_tgt_mean_s.array.argmax(axis=1) # obtains the arg of max output other than the correct        
+        
+#         return sm,
+
+#     def backward(self, indexes, grad_outputs):
+#         eps = 10**-14 # numerical stability constant
+#         gy, = grad_outputs
+#         c_mean, max_mean, max_var, ru_mean, ru_var = self.get_retained_inputs()
+#         max_mean = max_mean.array
+#         max_var = max_var.array
+#         ru_mean = ru_mean.array
+#         ru_var = ru_var.array
+#         alpha = (max_mean - ru_mean)/(cp.sqrt(2 * (max_var + ru_var) + eps))
+
+#         gmean_c = -gy
+#         gmean_max = gy * (1 + erf(alpha)) * 0.5
+#         gvar_max = gy * 0.5 * cp.exp(-alpha**2) / cp.sqrt(2 * cp.pi * (max_var + ru_var) + eps)
+#         gmean_ru = gy - gmean_max
+#         gvar_ru = gvar_max
+#         return gmean_c, gmean_max, gvar_max, gmean_ru, gvar_ru
+
 def sm(out_m, out_v, target):
     """ Mean of Rectified Normal distribution (a.k.a., mean of Rectified Linear with Gaussian pre-activation) function
     The function computes the mean of the rectified Normal distribution with mean

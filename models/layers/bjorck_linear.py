@@ -12,7 +12,7 @@ class BjorckLinear(DenseLinear, Adam):
         Adam.__init__(self, **kwargs)
         self.config = config
         self.ortho_w = None
-        self.iter = 0
+        self.iter = self.config['iter']
         self.dynamic_iter = config['dynamic_iter']
 
     def forward(self, x, n_batch_axes: int = 1, train = False):
@@ -35,21 +35,6 @@ class BjorckLinear(DenseLinear, Adam):
 
         if train:
             self.orthonormalize()        
-        elif self.iter == 0:
-            self.iter = min_ortho_iter(self.W,
-                                           beta=self.config['beta'],
-                                           iters=self.config['iter'],
-                                           order=self.config['order'], first = False)
-            self.orthonormalize()
-        elif self.dynamic_iter:
-            # If dynamic_iter = True adapts every 10 epochs the number of iterations layerwise for BO to avoid unnecessary iterations
-            if self.last_epoch % 10 == 0 and self.last_epoch > 0:
-                self.iter = min_ortho_iter(self.W,
-                                           beta=self.config['beta'],
-                                           iters=self.iter,
-                                           order=self.config['order'])
-                print(self.iter)
-
         return F.linear(x, self.ortho_w, self.b, n_batch_axes=n_batch_axes)
 
     def orthonormalize(self):
@@ -60,8 +45,15 @@ class BjorckLinear(DenseLinear, Adam):
         else:
             scaling = 1.0
 
-        self.ortho_w = bjorck_orthonormalize(self.W.T / scaling,
+        self.ortho_w = bjorck_orthonormalize(self.W / scaling,
                                              beta=self.config['beta'],
                                              iters=self.iter,
-                                             order=self.config['order']).T
+                                             order=self.config['order'])
         return
+
+    def iter_red(self):
+        self.iter = min_ortho_iter(self.W,
+                                        beta=self.config['beta'],
+                                        iters=self.iter,
+                                        order=self.config['order'])
+        print(self.iter)

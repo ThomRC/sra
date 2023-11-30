@@ -167,8 +167,6 @@ if __name__ == '__main__':
 
             while True:
                 curr_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
-                print(curr_dir)
-                print(curr_fold)
                 measures_save_dir = curr_dir + "/measurements/{}/".format(kwargs['dataset']) + "{}/".format(kwargs['arch'])
                 if not os.path.isdir(measures_save_dir[0:-1]):
                     os.makedirs(measures_save_dir[0:-1])

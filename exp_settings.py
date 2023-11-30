@@ -168,7 +168,7 @@ def settings():
         elif init == "orthogonal":
             initializer = initializers.Orthogonal(scale=1.0)
             # config used for bjorck orthog. on paper exps: 'beta': 0.5,'iter': 30, 'order': 1, 'safe_scaling': True
-            bjorck_config = {'beta': 0.5, 'iter': 40, 'order': 1, 'safe_scaling': True, 'dynamic_iter': True}
+            bjorck_config = {'beta': 0.5, 'iter': 10, 'order': 1, 'safe_scaling': True, 'dynamic_iter': True}
     else:
         raise RuntimeError('Chosen initialization couldn\'target be recognized\n'
                            'Currently implemented: '

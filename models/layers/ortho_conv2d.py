@@ -10,7 +10,7 @@ import einops
 
 from optimizers.updater_adam import Adam
 from utils.conv_utils import conv2d_cyclic_pad
-from utils.bjorck_ortho import bjorck_orthonormalize_bcop, get_safe_bjorck_scaling, min_ortho_iter_bcop
+from utils.bjorck_ortho import bjorck_orthonormalize, get_safe_bjorck_scaling, min_ortho_iter
 
 from models.activations.relu_moments import relu_moments
 
@@ -154,7 +154,7 @@ class BCOP(link.Link, Adam):
 
         self.config = config
         self.ortho_w = None
-        self.iter = 0
+        self.iter = self.config['iter']
         self.dynamic_iter = config['dynamic_iter']
 
         self.kernel_size = kernel_size
@@ -194,21 +194,6 @@ class BCOP(link.Link, Adam):
     def forward(self, x, train = False):
         if train:
             self.orthonormalize()
-        elif self.iter == 0:
-            self.iter = min_ortho_iter_bcop(self.W,
-                                           beta=self.config['beta'],
-                                           iters=self.config['iter'],
-                                           order=self.config['order'])        
-            self.orthonormalize(x)
-        elif self.dynamic_iter:
-            # If dynamic_iter = True adapts every 10 epochs the number of iterations layerwise for BO to avoid unnecessary iterations
-            if self.last_epoch % 10 == 0 and self.last_epoch > 0:
-                self.iter = min_ortho_iter_bcop(self.W,
-                                           beta=self.config['beta'],
-                                           iters=self.iter,
-                                           order=self.config['order'])
-                print(self.iter)
-
         # apply cyclic padding to the input and perform a standard convolution
         return conv2d_cyclic_pad(x, self.ortho_w, self.b)
 
@@ -221,7 +206,7 @@ class BCOP(link.Link, Adam):
             scaling = 1.0
 
         # orthognoalize all the matrices using Bjorck
-        ortho = bjorck_orthonormalize_bcop(self.W / scaling,
+        ortho = bjorck_orthonormalize(self.W / scaling,
                                             beta=self.config['beta'],
                                             iters=self.iter,
                                             order=self.config['order'])
@@ -239,33 +224,40 @@ class BCOP(link.Link, Adam):
         return 
 
     def relu_moment_propagation(self, x_m, x_v, w_grad = False, layer_num = None, x_var = None):
-            """ Computes the pre-activation's mean and variance vectors and calls the relu_moments function
+        """ Computes the pre-activation's mean and variance vectors and calls the relu_moments function
 
-            Args:
-                x_m: previous layer's mean vector
-                x_v: previous layer's variance vector (we assume independent activations, i.e., zero covariances
-                w_grad: boolean telling whether the gradients are needed or not
+        Args:
+            x_m: previous layer's mean vector
+            x_v: previous layer's variance vector (we assume independent activations, i.e., zero covariances
+            w_grad: boolean telling whether the gradients are needed or not
 
-            Returns:
+        Returns:
 
-            """
-            # if self.W.array is None:
-            #     in_size = utils.size_of_shape(x.shape[n_batch_axes:])
-            #     self._initialize_params(in_size)
+        """
+        # if self.W.array is None:
+        #     in_size = utils.size_of_shape(x.shape[n_batch_axes:])
+        #     self._initialize_params(in_size)
 
-            if w_grad:
-                self.orthonormalize() # carries orthonormalization only in the case of needing the W gradients
-                W = self.ortho_w
-            else:
-                W = self.ortho_w.array
+        if w_grad:
+            self.orthonormalize() # carries orthonormalization only in the case of needing the W gradients
+            W = self.ortho_w
+        else:
+            W = self.ortho_w.array
 
-            mean_s = conv2d_cyclic_pad(x_m, W, self.b)
-            
-            if layer_num == 0:
-                var_s = variable.Variable(cp.zeros_like(mean_s.array)) + x_var
-            else:
-                var_s = conv2d_cyclic_pad(x_v, W**2, self.b)
+        mean_s = conv2d_cyclic_pad(x_m, W, self.b)
+        
+        if layer_num == 0:
+            var_s = variable.Variable(cp.zeros_like(mean_s.array)) + x_var
+        else:
+            var_s = conv2d_cyclic_pad(x_v, W**2, self.b)
 
-            h_m, h_v = relu_moments(mean_s, var_s)
+        h_m, h_v = relu_moments(mean_s, var_s)
 
-            return mean_s, var_s, h_m, h_v
+        return mean_s, var_s, h_m, h_v
+        
+    def iter_red(self):
+        self.iter = min_ortho_iter(self.W,
+                                        beta=self.config['beta'],
+                                        iters=self.iter,
+                                        order=self.config['order'])
+        print(self.iter)

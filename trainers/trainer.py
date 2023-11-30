@@ -145,8 +145,9 @@ class NNAgent(object):
         with no_backprop_mode():
         #     # first call of model to initialize values without generating computational graph
         #     self.model(self.train_in, train = False)
-            self.model(self.train_in[0:2], train = False)
-
+            self.model(self.train_in[0:2])
+        self.model.ortho_iter_red()
+        
         print("Total epochs for training = ", self.n_epoch)
         for epoch in range(self.n_epoch):
             now = time.time()
@@ -159,8 +160,8 @@ class NNAgent(object):
                 count += 1
                 data_indices = perm_tr[batch_idx:batch_idx + self.batch_size]
 
-                # in_data = randomcrop(randomhorizontalflip(self.train_in[data_indices]), 32, 4)
-                in_data = self.train_in[data_indices]
+                in_data = randomcrop(randomhorizontalflip(self.train_in[data_indices]), 32, 4)
+                # in_data = self.train_in[data_indices]
                 
                 t = self.train_out[data_indices]
                 ##### Gradient update averaging loop
@@ -198,6 +199,9 @@ class NNAgent(object):
 
             self.loss_value.append(loss_avg/self.M)
             print("Avg. loss: {}".format(loss_avg / self.M))
+
+            if (epoch + 1) % 10 == 0:
+                self.model.ortho_iter_red()
 
             if (epoch + 1) % 20 == 0:
                 accuracy = self.model.validation(self.valid_in, self.valid_out)

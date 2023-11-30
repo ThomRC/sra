@@ -114,6 +114,11 @@ class FeedForwardNN(chainer.ChainList):
         h = self[link + 1](h, train = train)
         return h
 
+    def ortho_iter_red(self):
+        for link in range(len(self)):
+            if hasattr(self[link], 'W') and self[link].dynamic_iter:
+                self[link].iter_red()
+
     def grad_norm(self):
         """ Obtain the l2-norm of the gradient to be used in the update_net function to avoid exploding gradients"""
         tot_grad = self.xp.array([])
