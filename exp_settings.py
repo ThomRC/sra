@@ -68,12 +68,12 @@ def settings():
     # cv_hl_strides = [1, 2, 1, 2]
     
     # Other settings(in_channels < hl1_channels)
-    cv_hl_kernels = [12, 12, 48, 48]
-    cv_hl_ksizes = [4, 3, 4, 3]
-    cv_hl_strides = [2, 1, 2, 1]  
-    # cv_hl_kernels = [8, 8, 16, 16]
+    # cv_hl_kernels = [12, 12, 48, 48]
     # cv_hl_ksizes = [4, 3, 4, 3]
-    # cv_hl_strides = [2, 1, 2, 1]
+    # cv_hl_strides = [2, 1, 2, 1]  
+    cv_hl_kernels = [8, 8, 16, 16]
+    cv_hl_ksizes = [4, 3, 4, 3]
+    cv_hl_strides = [2, 1, 2, 1]
     # 
     # cv_hl_kernels = [3]
     # cv_hl_ksizes = [3]
@@ -90,9 +90,9 @@ def settings():
     # Fully-connected layers
     units = 512  # # OV: 512 units per layer
     in_padding = False # concatenates channels to match the dimension of lower to higher dimensional transformations
-    # fc_hl_units = [units]
+    fc_hl_units = [units]
     # fc_hl_units = [units,units]
-    fc_hl_units = [units, units, units]
+    # fc_hl_units = [units, units, units]
     # fc_hl_units = [units, units, units, units, units, units]
     # IN CASE OF EACH LAYER HAVING DIFFERENT # OF UNITS PLEASE CHANGE IT HERE MANUALLY
 

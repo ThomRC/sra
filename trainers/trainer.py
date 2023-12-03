@@ -96,10 +96,10 @@ class NNAgent(object):
                 self.tr_x, self.te_x, self.tr_y, self.te_y, self.tr_idx, self.te_idx = mnist_preprocessing(60000, 10000, self.intvl_in, self.center_in, self.model.tr_idx, self.model.te_idx, norm = kwargs['normalization'], arch = kwargs['arch'])
             elif self.dataset == "cifar10":
                 self.n_out = 10
-                self.tr_x, self.te_x, self.tr_y, self.te_y, self.tr_idx, self.te_idx = cifar10_preprocessing(50000, 10000, 4., 0., self.model.tr_idx, self.model.te_idx, norm = kwargs['normalization'], arch = kwargs['arch'])
+                self.tr_x, self.te_x, self.tr_y, self.te_y, self.tr_idx, self.te_idx = cifar10_preprocessing(50000, 10000,self.intvl_in, self.center_in, self.model.tr_idx, norm = kwargs['normalization'], arch = kwargs['arch'])
             elif self.dataset == "cifar10":
                 self.n_out = 100
-                self.tr_x, self.te_x, self.tr_y, self.te_y, self.tr_idx, self.te_idx = cifar100_preprocessing(50000, 10000, 4., 0., self.model.tr_idx, self.model.te_idx, norm = kwargs['normalization'], arch = kwargs['arch'])
+                self.tr_x, self.te_x, self.tr_y, self.te_y, self.tr_idx, self.te_idx = cifar100_preprocessing(50000, 10000, self.intvl_in, self.center_in, self.model.tr_idx, norm = kwargs['normalization'], arch = kwargs['arch'])
             else:
                 print("Asked dataset ", self.dataset, " is not recognized.")
                 return
@@ -111,20 +111,6 @@ class NNAgent(object):
         self.model = mlp.FeedForwardNN(self.n_out, *args, **kwargs).to_gpu()
         self.model.n_in = self.tr_x.shape[1]
 
-        # Add zero-padding to tr and te inputs in order to match the HL1 dimension
-        if kwargs['in_padding'] and self.model.delta_dim > 0:
-            print("With dimension matching zero-padding of input")
-            self.model.zero_cat_in = True
-            tr_shape = [self.tr_x.shape[0], int(self.model.delta_dim)]
-            te_shape = [self.te_x.shape[0], int(self.model.delta_dim)]
-
-            if len(self.tr_x.shape) > 2:
-                for i in self.tr_x.shape[2:]:
-                    tr_shape.append(i)
-                    te_shape.append(i)
-            
-            self.tr_x = self.model.xp.concatenate((self.tr_x, self.model.xp.zeros(tuple(tr_shape))), axis = 1)
-            self.te_x = self.model.xp.concatenate((self.te_x, self.model.xp.zeros(tuple(te_shape))), axis = 1)
 
     def training(self):
         """ Function to run the training part of the training routine
@@ -159,9 +145,10 @@ class NNAgent(object):
             for batch_idx in six.moves.range(0,self.n_train,self.batch_size):
                 count += 1
                 data_indices = perm_tr[batch_idx:batch_idx + self.batch_size]
-
-                in_data = randomcrop(randomhorizontalflip(self.train_in[data_indices]), 32, 4)
-                # in_data = self.train_in[data_indices]
+                # in_data = randomhorizontalflip(self.train_in[data_indices])
+                # in_data = randomcrop(self.train_in[data_indices], 32, 4)
+                # in_data = randomcrop(randomhorizontalflip(self.train_in[data_indices]), 32, 4)
+                in_data = self.train_in[data_indices]
                 
                 t = self.train_out[data_indices]
                 ##### Gradient update averaging loop

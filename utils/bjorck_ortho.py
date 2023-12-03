@@ -94,8 +94,8 @@ def min_ortho_iter(w, beta=0.5, iters=30, order=1, first = False):
     Returns: the new number of iterations for the current layer
 
     """
-    ths1 = 5*10**-8
-    ths2 = 0.99999995
+    ths1 = 10**-7
+    ths2 = 0.9999995
     
     scaling = get_safe_bjorck_scaling(w)
     mean_dot_offdiag = 0.

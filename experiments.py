@@ -142,6 +142,12 @@ if __name__ == '__main__':
         mode = sys.argv[4].lower()
         gpu = int(sys.argv[5])
 
+    if mode not in {'train', 'load', 'load_all'}:
+        raise RuntimeError('Mode should be \'train\' or \'load\' or \'load_all\. You entered {mode} \n'
+                           'train: carries out training given settings in exp_settings.py file\n'
+                           'load: loads and carries out measurements of trained nets with architecture defined in exp_settings.py AND loss and hyperparameters given as arguments\n'
+                           'load_all: loads and carries out measurements of all trained nets with architecture defined in exp_settings.py\n')
+        
     cp.cuda.Device(gpu).use()
     d = cp.asarray(d, dtype=cp.float32)
     x_var = cp.asarray(x_var, dtype=cp.float32)
@@ -211,10 +217,16 @@ if __name__ == '__main__':
 
                     # Sets the Bjorck orthogonalization settings for each layer
                     for j in range(len(network.model)):
-                        network.model[j].config['dynamic_iter'] = True
-                        network.model[j].dynamic_iter = True
-
+                        if hasattr(network.model[j], 'W'):
+                            network.model[j].config['dynamic_iter'] = True
+                            network.model[j].dynamic_iter = True
+                    
+                    network.model.ortho_iter_red()
+                    
                     # Performance and robustness measurements
-                    robustness.measurements(network, x_m, target, measures_save_dir)
+                    robust_msr = True
+                    num_int = False
+                    sample_est = False
+                    robustness.measurements(network, x_m, target, measures_save_dir, robustness = robust_msr, num_int = num_int, sample_est = sample_est)
 
                 sys.exit("Finished the data collection of robustness measurements")

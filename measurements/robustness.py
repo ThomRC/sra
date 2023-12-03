@@ -193,7 +193,7 @@ def perturbation_eval(network, x, target, name_str):
     noise_acc = []
     ssnr_acc = []
 
-    acc = cuda.to_cpu(network.model.validation(x, target, train=True)) # train = True so that the orthogonalization can be carried for the first time. The other times using validation train = False uses the already orthogonalized weights
+    acc = cuda.to_cpu(network.model.validation(x, target, train=False))
     acc_noise = cuda.to_cpu(network.model.validation(x, target, noise_in=True, sd=0.1, train=False))
     print("Clean accuracy : {}".format(acc))
     print("Clean noise accuracy : {}".format(acc_noise))
@@ -321,7 +321,7 @@ def emp_evals(network, x, target):
     print("Exe. time = {}".format(time.perf_counter() - start_time))
     return cuda.to_cpu(cp.asarray(prob_c_arr)), cuda.to_cpu(cp.asarray(margin_mean_arr)), cuda.to_cpu(cp.asarray(margin_var_arr))
 
-def measurements(network, x, target, dest):
+def measurements(network, x, target, dest, robustness = True, num_int = True, sample_est = True):
     """ Calls functions to carry all robustness measurements for the currently loaded NN and stores it into a dictionary that will be used to save the data into .npy files
 
     Args:
@@ -342,22 +342,32 @@ def measurements(network, x, target, dest):
     corr_class = cuda.to_cpu(cp.argmax(mean_s.array, axis=1)) # ndarray containing the output indices with maximal value
     corr_idx = corr_class == t # boolean ndarray of size = the number of test samples with True where correctly classified
     corr_samples = np.arange(10000)[corr_idx]  # ndarray containing the indices of correctly classified samples
-    corr_x = x[corr_samples,:].reshape((len(corr_samples),-1)) # ndarray containing the test samples that are correclt classified
+    in_shape = [i for i in x.shape[1:]]
+    data_shape = [len(corr_samples)]
+    data_shape.extend(in_shape)
+    network.model.data_shape = data_shape
+    corr_x = x[corr_samples,:].reshape(data_shape) # ndarray containing the test samples that are correclt classified
     corr_t = target[corr_idx] # ndarray containing the labels of correctly classified inputs
 
     measurements_dict = {}
     measurements_dict['target'] = cuda.to_cpu(corr_t.array)
     measurements_dict['clean_acc'] = len(corr_t)/len(t)
-    measurements_dict['linf_adv_acc'], measurements_dict['linf_adv_acc_noise'], measurements_dict['l2_adv_acc'], measurements_dict['l2_adv_acc_noise'], measurements_dict['gauss_acc'], measurements_dict['SSNR_acc'] = perturbation_eval(network, corr_x, corr_t, name_str)
-    if any(not os.path.isfile(name_str + measurement) for measurement in ['p_c.npy', 'p_ru.npy', 'smooth_margin.npy', 'mean_out.npy', 'var_out.npy']):
-        measurements_dict['p_c'], measurements_dict['p_ru'], measurements_dict['smooth_margin'], measurements_dict['mean_out'], measurements_dict['var_out'] = robustness_eval(network, corr_x, cuda.to_cpu(corr_t.array))
-    else:
-        print("Files found for current settings. Skipping the numerical integration of classification probability and smoothed margin.")
+    
+    if robustness:
+        measurements_dict['linf_adv_acc'], measurements_dict['linf_adv_acc_noise'], measurements_dict['l2_adv_acc'], measurements_dict['l2_adv_acc_noise'], \
+            measurements_dict['gauss_acc'], measurements_dict['SSNR_acc'] = perturbation_eval(network, corr_x, corr_t, name_str)
+    
+    if num_int:
+        if any(not os.path.isfile(name_str + measurement) for measurement in ['p_c.npy', 'p_ru.npy', 'smooth_margin.npy', 'mean_out.npy', 'var_out.npy']):
+            measurements_dict['p_c'], measurements_dict['p_ru'], measurements_dict['smooth_margin'], measurements_dict['mean_out'], measurements_dict['var_out'] = robustness_eval(network, corr_x, cuda.to_cpu(corr_t.array))
+        else:
+            print("Files found for current settings. Skipping the numerical integration of classification probability and smoothed margin.")
 
-    if any(not os.path.isfile(name_str + measurement) for measurement in ['emp_p_c.npy', 'emp_margin_mean.npy', 'emp_margin_var.npy']):
-        measurements_dict['emp_p_c'], measurements_dict['emp_margin_mean'], measurements_dict['emp_margin_var'] = emp_evals(network, x, target)
-    else:
-        print("Files found for current settings. Skipping the sample estimate of classification probability and smoothed margin.")
+    if sample_est:
+        if any(not os.path.isfile(name_str + measurement) for measurement in ['emp_p_c.npy', 'emp_margin_mean.npy', 'emp_margin_var.npy']):
+            measurements_dict['emp_p_c'], measurements_dict['emp_margin_mean'], measurements_dict['emp_margin_var'] = emp_evals(network, x, target)
+        else:
+            print("Files found for current settings. Skipping the sample estimate of classification probability and smoothed margin.")
 
     save_measurements(name_str, measurements_dict)
 
