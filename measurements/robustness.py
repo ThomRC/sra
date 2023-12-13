@@ -24,7 +24,7 @@ def linf_attacks(network, x, target):
     if network.dataset == "MNIST":
         radius_step = 0.025
     elif network.dataset == "cifar10":
-        radius_step = 0.0025
+        radius_step = 0.00625
     scale = 1.0
     cw_cut = 0
     loss_func = 'CW'  ## 'crossentropy', 'CW', 'sm'
@@ -75,7 +75,7 @@ def l2_attacks(network, x, target):
     if network.dataset == "MNIST":
         radius_step = 0.32
     elif network.dataset == "cifar10":
-        radius_step = 0.032
+        radius_step = 0.16
     scale = 1.0
     cw_cut = 0
     loss_func = 'CW'  ## 'crossentropy', 'CW', 'sm'
@@ -127,10 +127,10 @@ def gaussian_noise_acc(network, x, target):
         sd_step = 0.32
     elif network.dataset == "cifar10":
         acc_threshold = 0.13
-        sd_step = 0.032
+        sd_step = 0.16
     elif network.dataset == "cifar100":
         acc_threshold = 0.013
-        sd_step = 0.032
+        sd_step = 0.16
 
     noise_acc = []
     samples = 5
