@@ -275,7 +275,7 @@ def run_training(**kwargs):
     agent.save_data(kwargs['save_data'])
 
     if epoch_aux + 1 == agent.n_epoch:
-        print("#### Finished training {}! Training duration was: {}".format(kwargs['exp_count'],
+        print("#### Finished training {}! Training duration was: {}".format(kwargs['exp_count']+1,
                                                                             time.perf_counter() - start))
         agent.save_net(epoch_aux + 1, kwargs['save_net'])
         return 1 # training succeeded

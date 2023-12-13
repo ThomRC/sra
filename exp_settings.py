@@ -90,9 +90,9 @@ def settings():
     # Fully-connected layers
     units = 512  # # OV: 512 units per layer
     in_padding = False # concatenates channels to match the dimension of lower to higher dimensional transformations
-    fc_hl_units = [units]
+    # fc_hl_units = [units]
     # fc_hl_units = [units,units]
-    # fc_hl_units = [units, units, units]
+    fc_hl_units = [units, units, units]
     # fc_hl_units = [units, units, units, units, units, units]
     # IN CASE OF EACH LAYER HAVING DIFFERENT # OF UNITS PLEASE CHANGE IT HERE MANUALLY
 
@@ -140,7 +140,8 @@ def settings():
     schedule = 'cos-ann'  # lr decay type 'cos-ann' or 'cst'
     adam_beta1 = 0.9  # OV: 0.9
     adam_beta2 = 0.999  # OV: 0.999
-    lr = 0.001  # OV: 0.001 # CIFAR-10
+    # lr = 0.001  # OV: 0.001 # CIFAR-10
+    lr = 0.01  # OV: 0.001 # CIFAR-10
     # lr = 0.01  # OV: 0.01 # MNIST
     ############################################################################
     # INITIZALIZATION

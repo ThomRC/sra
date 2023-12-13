@@ -184,6 +184,7 @@ if __name__ == '__main__':
                     net_path = file
                     print(kwargs['net_save_dir'])
                     print(measures_save_dir)
+                    print(file)
                     kwargs_load = {'exp_count': None, 'success': None, 'data_save_dir': None}
                     kwargs = {**kwargs, **kwargs_load}
                     # Builds NNAgent object with architecture settings
@@ -204,9 +205,12 @@ if __name__ == '__main__':
                     # code.interact(local=locals())
                     loss = re.search('loss_(.*)_ep', net_path).group(1)
                     epochs = re.search('_ep_(.*)_x_var', net_path).group(1)
-                    x_var = float(re.search('x_var_(.*)_d', net_path).group(1))
-                    d = float(re.search('{}_d_(.*)_'.format(x_var), net_path).group(1))
+                    x_var = re.search('x_var_(.*)_d', net_path).group(1)
+                    d = re.search('{}_d_(.*)_'.format(x_var), net_path).group(1)
                     training_num = float(re.search('_d_{}_(.*)'.format(d), net_path).group(1))
+                    x_var = float(x_var)
+                    d = float(d)
+                    
                     arch = network.model.arch
                     network.loss = loss
                     network.epochs = epochs

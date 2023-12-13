@@ -24,7 +24,7 @@ def linf_attacks(network, x, target):
     if network.dataset == "MNIST":
         radius_step = 0.025
     elif network.dataset == "cifar10":
-        radius_step = 0.025
+        radius_step = 0.0025
     scale = 1.0
     cw_cut = 0
     loss_func = 'CW'  ## 'crossentropy', 'CW', 'sm'
@@ -75,7 +75,7 @@ def l2_attacks(network, x, target):
     if network.dataset == "MNIST":
         radius_step = 0.32
     elif network.dataset == "cifar10":
-        radius_step = 0.32
+        radius_step = 0.032
     scale = 1.0
     cw_cut = 0
     loss_func = 'CW'  ## 'crossentropy', 'CW', 'sm'
@@ -171,7 +171,7 @@ def ssnr_eval_acc(network, x, target):
 
     return noise_acc
 
-def perturbation_eval(network, x, target, name_str):
+def adversarial_eval(network, x, target, name_str):
     """ Empirical external perturbation evaluations (L2 and Linf PGD attacks, Gaussian noise perturbation) and SSNR linear corruption)
 
     Args:
@@ -184,33 +184,17 @@ def perturbation_eval(network, x, target, name_str):
 
     """
     start_time = time.perf_counter()
-    print("### 1) Robustness tests (L2 and Linf PGD attacks, Gaussian noise perturbation) and SSNR linear corruption ###")
+    print("### 1.1) Adversarial robustness tests (L2 and Linf PGD attacks) ###")
 
     adv_acc_linf = []
     noise_adv_acc_linf = []
     adv_acc_l2 = []
     noise_adv_acc_l2 = []
-    noise_acc = []
-    ssnr_acc = []
 
     acc = cuda.to_cpu(network.model.validation(x, target, train=False))
     acc_noise = cuda.to_cpu(network.model.validation(x, target, noise_in=True, sd=0.1, train=False))
     print("Clean accuracy : {}".format(acc))
     print("Clean noise accuracy : {}".format(acc_noise))
-
-    ssnr_acc.append(acc)
-    if not os.path.isfile(name_str + 'SSNR_acc.npy'):
-        aux1 = cuda.to_cpu(cp.asarray(ssnr_eval_acc(network, x, target)))
-        ssnr_acc.extend(aux1)
-    else:
-        ssnr_acc = None
-
-    noise_acc.append(acc)
-    if not os.path.isfile(name_str + 'gauss_acc.npy'):
-        aux1 = cuda.to_cpu(cp.asarray(gaussian_noise_acc(network, x, target)))
-        noise_acc.extend(aux1)
-    else:
-        noise_acc = None
 
     adv_acc_linf.append(acc)
     noise_adv_acc_linf.append(acc_noise)
@@ -233,8 +217,46 @@ def perturbation_eval(network, x, target, name_str):
         noise_adv_acc_l2 = None
 
     print("Exe. time = {}".format(time.perf_counter() - start_time))
+    return adv_acc_linf, noise_adv_acc_linf, adv_acc_l2, noise_adv_acc_l2
 
-    return adv_acc_linf, noise_adv_acc_linf, adv_acc_l2, noise_adv_acc_l2, noise_acc, ssnr_acc
+def other_eval(network, x, target, name_str):
+    """ Empirical external perturbation evaluations (L2 and Linf PGD attacks, Gaussian noise perturbation) and SSNR linear corruption)
+
+    Args:
+        network: NNAgent object containing the model subject to the pertubation
+        x: input that will be perturbed
+        target: correct class array
+        name_str: string containing the name code for current net to check if the measurements were already taken
+
+    Returns: the measured accuracies for the four different types of perturbation
+
+    """
+    start_time = time.perf_counter()
+    print("### 1.2) Gaussian noise perturbation and SSNR linear corruption robustness tests ###")
+
+    noise_acc = []
+    ssnr_acc = []
+
+    acc = cuda.to_cpu(network.model.validation(x, target, train=False))
+    print("Clean accuracy : {}".format(acc))
+    ssnr_acc.append(acc)
+    print(name_str + 'SSNR_acc.npy')
+    if not os.path.isfile(name_str + 'SSNR_acc.npy'):
+        aux1 = cuda.to_cpu(cp.asarray(ssnr_eval_acc(network, x, target)))
+        ssnr_acc.extend(aux1)
+    else:
+        ssnr_acc = None
+
+    noise_acc.append(acc)
+    print(name_str + 'gauss_acc.npy')
+    if not os.path.isfile(name_str + 'gauss_acc.npy'):
+        aux1 = cuda.to_cpu(cp.asarray(gaussian_noise_acc(network, x, target)))
+        noise_acc.extend(aux1)
+    else:
+        noise_acc = None
+
+    print("Exe. time = {}".format(time.perf_counter() - start_time))
+    return noise_acc, ssnr_acc
 
 def robustness_eval(network, x, target):
     """ Obtain through numerical integration the variables required to certify the robustness for different input sd
@@ -354,9 +376,9 @@ def measurements(network, x, target, dest, robustness = True, num_int = True, sa
     measurements_dict['clean_acc'] = len(corr_t)/len(t)
     
     if robustness:
-        measurements_dict['linf_adv_acc'], measurements_dict['linf_adv_acc_noise'], measurements_dict['l2_adv_acc'], measurements_dict['l2_adv_acc_noise'], \
-            measurements_dict['gauss_acc'], measurements_dict['SSNR_acc'] = perturbation_eval(network, corr_x, corr_t, name_str)
-    
+        measurements_dict['linf_adv_acc'], measurements_dict['linf_adv_acc_noise'], measurements_dict['l2_adv_acc'], measurements_dict['l2_adv_acc_noise'] = adversarial_eval(network, corr_x, corr_t, name_str)
+        measurements_dict['gauss_acc'], measurements_dict['SSNR_acc'] = other_eval(network, x, target, name_str)
+
     if num_int:
         if any(not os.path.isfile(name_str + measurement) for measurement in ['p_c.npy', 'p_ru.npy', 'smooth_margin.npy', 'mean_out.npy', 'var_out.npy']):
             measurements_dict['p_c'], measurements_dict['p_ru'], measurements_dict['smooth_margin'], measurements_dict['mean_out'], measurements_dict['var_out'] = robustness_eval(network, corr_x, cuda.to_cpu(corr_t.array))
