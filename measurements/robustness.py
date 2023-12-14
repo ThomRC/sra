@@ -36,10 +36,11 @@ def linf_attacks(network, x, target):
     samples = 5
     radius = 0
     aux = cp.zeros(samples)
-    while radius == 0 or cp.sum(aux) > 0:
+    counter = 0
+    while radius == 0 or cp.min(aux) > 0:
+        radius += radius_step
         aux = cp.zeros(samples)
         aux2 = cp.zeros(samples)
-        radius += radius_step
         for i in range(samples):
             step_size = 0.08 * radius
             t1_1 = time.perf_counter()
@@ -48,7 +49,6 @@ def linf_attacks(network, x, target):
                     network.center_in - network.intvl_in / 2, network.center_in + network.intvl_in / 2), eps_norm=eps_norm,
                                                              step_norm=step_norm, loss_func=loss_func, pert_scale=scale,
                                                              cw_cut=cw_cut)
-
             aux[i] = network.model.validation(Variable(x_adv), target, noise_in=False, train=False)
             print("Accuracy for Linf radius = {} is {} #{}".format(radius, aux[i], i))
             aux2[i] = network.model.validation(Variable(x_adv), target, noise_in=True, sd=0.1, train=False)
@@ -58,7 +58,12 @@ def linf_attacks(network, x, target):
 
         adv_acc.append(cp.asarray(aux).min())
         noise_adv_acc.append(cp.asarray(aux2).min())
-
+        if cp.min(aux) < 0.001:
+            counter += 1
+        
+        if counter > 3:
+            print("Some samples wont converge. Stopping Linf attacks earlier")
+            break
     return adv_acc, noise_adv_acc
 
 def l2_attacks(network, x, target):
@@ -87,7 +92,8 @@ def l2_attacks(network, x, target):
     samples = 5
     radius = 0
     aux = cp.zeros(samples)
-    while radius == 0 or cp.sum(aux) > 0:
+    counter = 0
+    while radius == 0 or cp.min(aux) > 0:
         radius += radius_step
         aux = cp.zeros(samples)
         aux2 = cp.zeros(samples)
@@ -108,7 +114,12 @@ def l2_attacks(network, x, target):
 
         adv_acc.append(cp.asarray(aux).min())
         noise_adv_acc.append(cp.asarray(aux2).min())
-
+        if cp.min(aux) < 0.001:
+            counter += 1
+        
+        if counter > 3:
+            print("Some samples wont converge. Stopping L2 attacks earlier")
+            break
     return adv_acc, noise_adv_acc
 
 def gaussian_noise_acc(network, x, target):
