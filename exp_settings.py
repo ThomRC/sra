@@ -8,7 +8,7 @@ import cupy as cp
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"  # In case the GPU order in the bus is different from the one listed by CUDA
 
-def settings():
+def settings(input_params):
     """ Function to return dictionary with all experimental and training settings
 
     Args:
@@ -68,12 +68,12 @@ def settings():
     # cv_hl_strides = [1, 2, 1, 2]
     
     # Other settings(in_channels < hl1_channels)
-    # cv_hl_kernels = [12, 12, 48, 48]
-    # cv_hl_ksizes = [4, 3, 4, 3]
-    # cv_hl_strides = [2, 1, 2, 1]  
-    cv_hl_kernels = [8, 8, 16, 16]
+    cv_hl_kernels = [16, 16, 64, 64]
     cv_hl_ksizes = [4, 3, 4, 3]
-    cv_hl_strides = [2, 1, 2, 1]
+    cv_hl_strides = [2, 1, 2, 1]  
+    # cv_hl_kernels = [8, 8, 16, 16]
+    # cv_hl_ksizes = [4, 3, 4, 3]
+    # cv_hl_strides = [2, 1, 2, 1]
     # 
     # cv_hl_kernels = [3]
     # cv_hl_ksizes = [3]
@@ -90,9 +90,9 @@ def settings():
     # Fully-connected layers
     units = 512  # # OV: 512 units per layer
     in_padding = False # concatenates channels to match the dimension of lower to higher dimensional transformations
-    # fc_hl_units = [units]
+    fc_hl_units = [units]
     # fc_hl_units = [units,units]
-    fc_hl_units = [units, units, units]
+    # fc_hl_units = [units, units, units]
     # fc_hl_units = [units, units, units, units, units, units]
     # IN CASE OF EACH LAYER HAVING DIFFERENT # OF UNITS PLEASE CHANGE IT HERE MANUALLY
 
@@ -121,7 +121,7 @@ def settings():
     print("Architecture used: " + arch_str)
     
     # /ARCHITECTURE SETTINGS
-    ############################################################################
+    #########################ß###################################################
     curr_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
 
     net_save_dir = curr_dir + "/trained_NNs/{}/{}/".format(dataset, arch) + "{}".format(arch_str)
@@ -137,30 +137,16 @@ def settings():
     ############################################################################
     # UPDATE ALGORITHM
     ############################################################################
-    schedule = 'cos-ann'  # lr decay type 'cos-ann' or 'cst'
+    schedule = 'cos-ann'  # lr decay type 'cos-ann', 'cst' or 'step'
     adam_beta1 = 0.9  # OV: 0.9
     adam_beta2 = 0.999  # OV: 0.999
     # lr = 0.001  # OV: 0.001 # CIFAR-10
-    lr = 0.01  # OV: 0.001 # CIFAR-10
+    lr = 0.005  # OV: 0.001 # CIFAR-10
     # lr = 0.01  # OV: 0.01 # MNIST
     ############################################################################
     # INITIZALIZATION
     ############################################################################
     init = 'orthogonal'  # OV: 'orthogonal' # if the weights should be initialized as 'orthogonal' or 'random'
-
-    if not sys.argv[5]:
-        raise RuntimeError('Four arguments required: \n'
-                           'loss: loss functions to be used \n'
-                           'd: margin enforcement hyperparameter \n'
-                           'x_var: variance of input Gaussian noise \n'
-                           'Mode: \'train\' or \'load\' \n'
-                           'gpu: number of gpu to be used')
-    else:
-        loss = sys.argv[1].lower()
-        d = cp.asarray(float(sys.argv[2]), dtype=cp.float32)
-        x_var = cp.asarray(float(sys.argv[3]), dtype=cp.float32)
-        mode = sys.argv[4].lower()
-        gpu = sys.argv[5]
 
     if init in {'random', 'orthogonal'}:
         if init == "random":
@@ -176,9 +162,9 @@ def settings():
                            '\n- Random (\'random\')'
                            '\n- Orthogonal (\'orthogonal\')')
 
-    kwargs_exp = {'gpu': gpu, 'dataset': dataset, 'in_interval': in_interval, 'in_center': in_center, 
+    kwargs_exp = {'dataset': dataset, 'in_interval': in_interval, 'in_center': in_center, 
                   'tr_size': tr_size, 'batch_size': batch_size, 'normalization': in_norm, 'in_padding': in_padding, 
-                  'loss': loss, 'x_var': x_var, 'd': d, 'lr': lr, 'beta1': adam_beta1, 'beta2': adam_beta2, 
+                  'lr': lr, 'beta1': adam_beta1, 'beta2': adam_beta2, 
                   'schedule': schedule, 'n_exp': n_exp, 'n_epoch': n_epoch, 'save_data': save_data,
                   'save_net': save_net, 'net_save_dir': net_save_dir}
     
@@ -186,5 +172,5 @@ def settings():
                     'fc_hl': fc_hl, 'fc_hl_units': fc_hl_units, 'ortho_ws': ortho_ws, 
                     'init': init, 'bias': bias, 'initial_w': initializer, 
                     'initial_bias': initial_bias, 'bjorck_config': bjorck_config}
-    kwargs = {**kwargs_exp, **kwargs_model}
-    return mode, kwargs
+    kwargs = {**kwargs_exp, **kwargs_model, **input_params}
+    return kwargs

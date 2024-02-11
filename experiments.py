@@ -133,33 +133,32 @@ if __name__ == '__main__':
                            'loss: loss functions to be used \n'
                            'd: margin enforcement hyperparameter \n'
                            'x_var: variance of input Gaussian noise \n'
-                           'Mode: \'train\' or \'load\' or \'load_all\' \n'
+                           'Mode: \'train\', \'load\', \'load_all\' or \'interact\' \n'
                            'gpu: number of gpu to be used')
     else:
-        loss = sys.argv[1].lower()
-        d = float(sys.argv[2])
-        x_var = float(sys.argv[3])
-        mode = sys.argv[4].lower()
         gpu = int(sys.argv[5])
-
-    if mode not in {'train', 'load', 'load_all'}:
-        raise RuntimeError('Mode should be \'train\' or \'load\' or \'load_all\. You entered {mode} \n'
+        cp.cuda.Device(gpu).use()
+        loss = sys.argv[1].lower()
+        d = cp.asarray(float(sys.argv[2]), dtype=cp.float32)
+        x_var = cp.asarray(float(sys.argv[3]), dtype=cp.float32)
+        mode = sys.argv[4].lower()
+        
+    if mode not in {'train', 'load', 'load_all', 'interact'}:
+        raise RuntimeError('Mode should be \'train\', \'load\', \'load_all\' or \'interact\'. You entered {mode} \n'
                            'train: carries out training given settings in exp_settings.py file\n'
                            'load: loads and carries out measurements of trained nets with architecture defined in exp_settings.py AND loss and hyperparameters given as arguments\n'
                            'load_all: loads and carries out measurements of all trained nets with architecture defined in exp_settings.py\n')
         
-    cp.cuda.Device(gpu).use()
-    d = cp.asarray(d, dtype=cp.float32)
-    x_var = cp.asarray(x_var, dtype=cp.float32)
+    input_params = {'loss': loss, 'd': d, 'x_var': x_var, 'gpu': gpu}
     
     while True:
-        mode, kwargs = settings()
+        kwargs = settings(input_params)
         if mode == 'train':
             print('### You entered training mode')
             args = experiment_routine(**kwargs)
             sys.exit("Exiting training")
 
-        elif mode == 'load' or mode == 'load_all':
+        elif mode in {'load', 'load_all', 'interact'}:
             print('### You entered load mode. In this mode the robustness measurements will be carried for the specified trained NN')
             # Load trained nets from trained nets folder for specified dataset and architecture file so that the
             # robustness and performance metrics can be computed
@@ -172,11 +171,14 @@ if __name__ == '__main__':
                     break
 
             while True:
-                curr_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
-                measures_save_dir = curr_dir + "/measurements/{}/".format(kwargs['dataset']) + "{}/".format(kwargs['arch'])
+                _, curr_fold = os.path.split(kwargs['net_save_dir'])
+                curr_dir, _ = os.path.split(os.path.dirname(os.path.realpath(__file__)))
+                measures_save_dir = curr_dir + "/measurements/{}/".format(kwargs['dataset']) + "{}/{}/".format(kwargs['arch'],curr_fold)
+                print(measures_save_dir)
                 if not os.path.isdir(measures_save_dir[0:-1]):
                     os.makedirs(measures_save_dir[0:-1])
-
+                
+                curr_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
                 filelist = robustness.list_nets(kwargs['net_save_dir'], loss = loss, d = d, x_var = x_var, load_mode = mode)
                 print(filelist)
                 # loops through all files in the .csv file
@@ -226,6 +228,9 @@ if __name__ == '__main__':
                             network.model[j].dynamic_iter = True
                     
                     network.model.ortho_iter_red()
+                    
+                    if mode == 'interact':
+                        code.interact(banner="Loaded in interactive mode:", local=locals())
                     
                     # Performance and robustness measurements
                     robust_msr = True

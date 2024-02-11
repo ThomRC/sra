@@ -1,5 +1,5 @@
 import typing as tp  # NOQA
-
+import code
 import cupy as cp
 import numpy as np
 import chainer
@@ -202,6 +202,70 @@ class FeedForwardNN(chainer.ChainList):
             h = self[link + 1](h, train = train) # If train = True it orthogonalizes the weights and we can take the gradients of the weights
 
             return F.accuracy(h, target).array
+
+    def output_cov(self, x, sd):
+        
+        # Using no_backprop_mode method since it is just required to forward the input through the network, and not to build a computational graph to apply the backprop
+        out = self.xp.zeros((samples, 10))
+        _, mean_s, var_s, mean_h, var_h = self.moment_propagation(len(self)-1, x, sd**2, train = False)
+        # x = x.array
+        # x = self.xp.expand_dims(x, 0)
+        if len(x.shape) == 3:
+            x = cp.repeat(cp.expand_dims(x.array,0), samples, 0)
+        # x_ext = self.xp.repeat(x.array, samples, -1)
+        with no_backprop_mode():
+            # for i in range(samples):
+            noise = self.noise_inj(x, sd, dist, radius)
+            h = x + noise
+
+            for link in range(len(self) - 1):
+                if hasattr(self[link], 'W'):
+                    h = activation(self[link](h))
+                else:
+                    h = self[link](h)
+
+            h = self[link + 1](h)
+            # out[i,:] = h.array.squeeze()
+            out = h.array
+            return out
+
+    def output_sampling(self, x, sd, samples = 100, dist='Normal', radius=0.3):
+        """ Obtains samples of the output layer for a single input
+
+        Args:
+            x: array of inputs subject to classification
+            sd: standard deviation of the isotropic Gaussian noise to be added to the input
+            samples: number of samples to be takes for the estimate
+            dist: isotropic distribution to be used. Can be either 'Normal' or 'Uniform'
+            radius: for the case of 'Uniform', radius is half the interval
+
+        Returns:
+            (samples, n_classes) matrix
+
+        """
+        
+        # Using no_backprop_mode method since it is just required to forward the input through the network, and not to build a computational graph to apply the backprop
+        out = self.xp.zeros((samples, 10))
+        # x = x.array
+        # x = self.xp.expand_dims(x, 0)
+        if len(x.shape) == 3:
+            x = cp.repeat(cp.expand_dims(x.array,0), samples, 0)
+        # x_ext = self.xp.repeat(x.array, samples, -1)
+        with no_backprop_mode():
+            # for i in range(samples):
+            noise = self.noise_inj(x, sd, dist, radius)
+            h = x + noise
+
+            for link in range(len(self) - 1):
+                if hasattr(self[link], 'W'):
+                    h = activation(self[link](h))
+                else:
+                    h = self[link](h)
+
+            h = self[link + 1](h)
+            # out[i,:] = h.array.squeeze()
+            out = h.array
+            return out
 
     def emp_prob(self, x, target, sd, samples = 100, dist = 'Normal', radius = 0.3):
         """ Obtains a sample estimate of probability of correct classification

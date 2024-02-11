@@ -387,13 +387,13 @@ def measurements(network, x, target, dest, robustness = True, num_int = True, sa
     measurements_dict['clean_acc'] = len(corr_t)/len(t)
     
     if robustness:
-        measurements_dict['linf_adv_acc'], measurements_dict['linf_adv_acc_noise'], measurements_dict['l2_adv_acc'], measurements_dict['l2_adv_acc_noise'] = adversarial_eval(network, corr_x, corr_t, name_str)
+        # measurements_dict['linf_adv_acc'], measurements_dict['linf_adv_acc_noise'], measurements_dict['l2_adv_acc'], measurements_dict['l2_adv_acc_noise'] = adversarial_eval(network, corr_x, corr_t, name_str)
         measurements_dict['gauss_acc'], measurements_dict['SSNR_acc'] = other_eval(network, x, target, name_str)
 
     if num_int:
         if any(not os.path.isfile(name_str + measurement) for measurement in ['p_c.npy', 'p_ru.npy', 'smooth_margin.npy', 'mean_out.npy', 'var_out.npy']):
             measurements_dict['p_c'], measurements_dict['p_ru'], measurements_dict['smooth_margin'], measurements_dict['mean_out'], measurements_dict['var_out'] = robustness_eval(network, corr_x, cuda.to_cpu(corr_t.array))
-        else:
+        else:   
             print("Files found for current settings. Skipping the numerical integration of classification probability and smoothed margin.")
 
     if sample_est:

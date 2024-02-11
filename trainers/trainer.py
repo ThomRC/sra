@@ -145,10 +145,10 @@ class NNAgent(object):
             for batch_idx in six.moves.range(0,self.n_train,self.batch_size):
                 count += 1
                 data_indices = perm_tr[batch_idx:batch_idx + self.batch_size]
-                # in_data = randomhorizontalflip(self.train_in[data_indices])
+                in_data = randomhorizontalflip(self.train_in[data_indices])
                 # in_data = randomcrop(self.train_in[data_indices], 32, 4)
                 # in_data = randomcrop(randomhorizontalflip(self.train_in[data_indices]), 32, 4)
-                in_data = self.train_in[data_indices]
+                # in_data = self.train_in[data_indices]
                 
                 t = self.train_out[data_indices]
                 ##### Gradient update averaging loop

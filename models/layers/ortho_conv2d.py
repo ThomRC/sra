@@ -82,13 +82,13 @@ def matrix_conv(m1, m2):
     return F.reshape(F.stack(result),(size,size,n,n))
 
 def convolution_orthogonal_generator_projs(ksize, cin, cout, ortho, sym_projs):
-    flipped = False
-    if cin > cout:
-        flipped = True
-        cin, cout = cout, cin
-        ortho = ortho.T
-    else:
+    # flipped = False
+    if cin < cout:
+        # flipped = True
+        # cin, cout = cout, cin
         ortho = cp.identity(cout)
+    # else:
+    #     ortho = cp.identity(cout)
     if ksize == 1:
         return ortho.reshape(1,1,ortho.shape[0],ortho.shape[1])
     
@@ -97,12 +97,11 @@ def convolution_orthogonal_generator_projs(ksize, cin, cout, ortho, sym_projs):
         p = matrix_conv(p, block_orth(sym_projs[_ * 2], sym_projs[_ * 2 + 1]))
     
     p = ortho.reshape(1,1,ortho.shape[0],ortho.shape[1]) @ p
-    
-    p = einops.rearrange(p, 'k1 k2 cin cout -> cout cin k2 k1')
-    p = p[:, 0:cin, :, :]
+    p = p[:, :, :, 0:cin]    
+    p = einops.rearrange(p, 'k1 k2 cout cin -> cout cin k2 k1')
 
-    if flipped:
-        return F.moveaxis(p, (0,2), (1,3))
+    # if flipped:
+    #     return F.moveaxis(p, (0,2), (1,3))
     return p
 
 def convolution_orthogonal_generator(ksize, cin, cout, P, Q):
@@ -212,7 +211,7 @@ class BCOP(link.Link, Adam):
                                             order=self.config['order'])
 
         # compute the symmetric projectors
-        H = ortho[0, : self.in_channels, : self.out_channels]
+        H = ortho[0, : self.out_channels, : self.in_channels]
         # H = ortho[0]
         PQ = ortho[1:]
         PQ = PQ * self.mask

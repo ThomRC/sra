@@ -26,6 +26,7 @@ class Adam:
         self.step_counter_bu = 0
         self.spe = 0 ### step per epoch
         self.W_bu = self.W.array
+        self.upd_start = 0
 
     def update(self, epoch, grad_norm):
         if self.m is None:
@@ -79,7 +80,7 @@ class Adam:
         if self.xp.isnan(self.W.grad.max()):
             print('Nan in grad')
             # In case there's any nan in the gradients it restores the weights, m and v from the last epoch's backup
-            if self.counter > 2000:
+            if self.counter > self.upd_start:
                 print("Gradient failure. Reducing lr and restoring weights from {} previous steps".format(self.spe))
                 self.W.array = self.xp.copy(self.W_bu)
                 self.m = self.xp.copy(self.m_bu)
@@ -94,9 +95,10 @@ class Adam:
             self.m += (1 - self.beta1) * ((norm_ratio * self.W.grad) - self.m)
             self.v += (1 - self.beta2) * ((norm_ratio * self.W.grad) ** 2 - self.v)
             
-            if self.counter > 2000:
-                self.adam_mult = (np.sqrt(1.0 - self.beta2**(self.counter-2000)) / (1.0 - self.beta1**(self.counter-2000))).astype('float32')
-                self.adam_grad = self.adam_mult * self.m / (self.xp.sqrt(self.v) + 1e-15)
+            # if self.counter > 2000:
+            if self.counter > self.upd_start:
+                self.adam_mult = (np.sqrt(1.0 - self.beta2**(self.counter-self.upd_start)) / (1.0 - self.beta1**(self.counter-self.upd_start))).astype('float32')
+                self.adam_grad = self.adam_mult * self.m / (self.xp.sqrt(self.v + 1e-15))
                 self.W.array -= self.lr_sch * self.lr * self.adam_grad
             
             self.counter += 1

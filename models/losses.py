@@ -76,7 +76,7 @@ def zhen_loss(mean_s, var_s, target, d, *args, **kwargs):
 
     """
     x_var = kwargs['x_var']
-    eps = 10**-14
+    eps = 10**-8
     idx_aux = cp.arange(len(target))
     aux =  cp.absolute(mean_s.array.max(1)) + cp.absolute(mean_s.array.min(1)) # maximum distance from the largest and smallest output
     aux2 = cp.zeros_like(mean_s.array)
@@ -158,27 +158,32 @@ class SmoothMargin(function_node.FunctionNode):
         raise NotImplementedError()
 
     def forward_gpu(self, inputs):
-        eps = 10**-14 # numerical stability constant
+        eps = 10**-8 # numerical stability constant
         self.retain_inputs((0, 1, 2, 3, 4))
         c_mean, max_mean, max_var, ru_mean, ru_var = inputs
-        alpha = (max_mean - ru_mean)/(cp.sqrt(2 * (max_var + ru_var) + eps))
-        aux = cp.sqrt((max_var+ru_var)/(2*cp.pi)) * cp.exp(-alpha**2) + ru_mean + (max_mean - ru_mean) * (1 + erf(alpha)) * 0.5
+        # alpha = (max_mean - ru_mean)/(cp.sqrt(2 * (max_var + ru_var) + eps))
+        alpha_sq = (max_mean - ru_mean)**2/(2 * (max_var + ru_var) + eps)
+        # aux = cp.sqrt((max_var+ru_var)/(2*cp.pi)) * cp.exp(-alpha**2) + ru_mean + (max_mean - ru_mean) * (1 + erf(alpha)) * 0.5
+        aux = cp.sqrt((max_var+ru_var)/(2*cp.pi)) * cp.exp(-alpha_sq) + ru_mean + (max_mean - ru_mean) * (1 + erf(cp.sqrt(alpha_sq))) * 0.5
         sm = aux - c_mean
         return sm,
 
     def backward(self, indexes, grad_outputs):
-        eps = 10**-14 # numerical stability constant
+        eps = 10**-8 # numerical stability constant
         gy, = grad_outputs
         c_mean, max_mean, max_var, ru_mean, ru_var = self.get_retained_inputs()
         max_mean = max_mean.array
         max_var = max_var.array
         ru_mean = ru_mean.array
         ru_var = ru_var.array
-        alpha = (max_mean - ru_mean)/(cp.sqrt(2 * (max_var + ru_var) + eps))
+        # alpha = (max_mean - ru_mean)/(cp.sqrt(2 * (max_var + ru_var) + eps))
+        alpha_sq = (max_mean - ru_mean)**2/(2 * (max_var + ru_var) + eps)
 
         gmean_c = -gy
-        gmean_max = gy * (1 + erf(alpha)) * 0.5
-        gvar_max = gy * 0.5 * cp.exp(-alpha**2) / cp.sqrt(2 * cp.pi * (max_var + ru_var) + eps)
+        # gmean_max = gy * (1 + erf(alpha)) * 0.5
+        gmean_max = gy * (1 + erf(cp.sqrt(alpha_sq))) * 0.5
+        # gvar_max = gy * 0.5 * cp.exp(-alpha**2) / cp.sqrt(2 * cp.pi * (max_var + ru_var) + eps)
+        gvar_max = gy * 0.5 * cp.exp(-alpha_sq) / cp.sqrt(2 * cp.pi * (max_var + ru_var) + eps)
         gmean_ru = gy - gmean_max
         gvar_ru = gvar_max
         return gmean_c, gmean_max, gvar_max, gmean_ru, gvar_ru
