@@ -61,7 +61,7 @@ def mc_hinge(logits, foo, target, d, *args, **kwargs):
 
     return F.mean(F.sum(F.relu(d - (c_out - notc_out)), axis = 1))
 
-def zhen_loss(mean_s, var_s, target, d, *args, **kwargs):
+def zhen_loss(mean_s, var_s, cov_s, target, d, *args, **kwargs):
     """ Zhen (randomized smoothing certified radius) loss
 
     Args:

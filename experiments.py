@@ -17,6 +17,7 @@ import cupy as cp
 from exp_settings import settings
 import trainers.trainer as trainer
 import measurements.robustness as robustness
+from measurements.robustness.utils import list_nets
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID" # In case the GPU order in the bus is different from the one listed by CUDA
 
@@ -31,6 +32,8 @@ def change_gpu(model, gpu):
         if hasattr(model[link], 'W'):
             model[link].W.to_gpu(gpu)
             model[link].ortho_w.to_gpu(gpu)
+            if hasattr(model[link], "kernel_size"):
+                model[link].mask.to_gpu(gpu)
         if hasattr(model[link], 'b') and model[link].b is not None:
             model[link].b.to_gpu(gpu)
 
@@ -179,7 +182,7 @@ if __name__ == '__main__':
                     os.makedirs(measures_save_dir[0:-1])
                 
                 curr_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
-                filelist = robustness.list_nets(kwargs['net_save_dir'], loss = loss, d = d, x_var = x_var, load_mode = mode)
+                filelist = list_nets(kwargs['net_save_dir'], loss = loss, d = d, x_var = x_var, load_mode = mode)
                 print(filelist)
                 # loops through all files in the .csv file
                 for file in filelist:
@@ -236,6 +239,7 @@ if __name__ == '__main__':
                     robust_msr = True
                     num_int = False
                     sample_est = False
-                    robustness.measurements(network, x_m, target, measures_save_dir, robustness = robust_msr, num_int = num_int, sample_est = sample_est)
+                    rs_cr = False
+                    robustness.measurements(network, x_m, target, measures_save_dir, robustness = robust_msr, num_int = num_int, sample_est = sample_est, rs_cr = rs_cr)
 
                 sys.exit("Finished the data collection of robustness measurements")

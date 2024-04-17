@@ -101,7 +101,7 @@ class FeedForwardNN(chainer.ChainList):
                 
             self.add_link(LinearLink(n_out, config = self.bjorck_config, **kwargs).to_gpu())
 
-    def __call__(self, x, y = None, norm_out = False, train = True):
+    def __call__(self, x, y = None, norm_out = False, train = False):
         """ Carries the forward pass over each element of the NN object under the specified activation function"""
         h = x
         for link in range(len(self) - 1):
@@ -203,32 +203,6 @@ class FeedForwardNN(chainer.ChainList):
 
             return F.accuracy(h, target).array
 
-    def output_cov(self, x, sd):
-        
-        # Using no_backprop_mode method since it is just required to forward the input through the network, and not to build a computational graph to apply the backprop
-        out = self.xp.zeros((samples, 10))
-        _, mean_s, var_s, mean_h, var_h = self.moment_propagation(len(self)-1, x, sd**2, train = False)
-        # x = x.array
-        # x = self.xp.expand_dims(x, 0)
-        if len(x.shape) == 3:
-            x = cp.repeat(cp.expand_dims(x.array,0), samples, 0)
-        # x_ext = self.xp.repeat(x.array, samples, -1)
-        with no_backprop_mode():
-            # for i in range(samples):
-            noise = self.noise_inj(x, sd, dist, radius)
-            h = x + noise
-
-            for link in range(len(self) - 1):
-                if hasattr(self[link], 'W'):
-                    h = activation(self[link](h))
-                else:
-                    h = self[link](h)
-
-            h = self[link + 1](h)
-            # out[i,:] = h.array.squeeze()
-            out = h.array
-            return out
-
     def output_sampling(self, x, sd, samples = 100, dist='Normal', radius=0.3):
         """ Obtains samples of the output layer for a single input
 
@@ -253,8 +227,7 @@ class FeedForwardNN(chainer.ChainList):
         # x_ext = self.xp.repeat(x.array, samples, -1)
         with no_backprop_mode():
             # for i in range(samples):
-            noise = self.noise_inj(x, sd, dist, radius)
-            h = x + noise
+            h = x + self.noise_inj(x, sd, dist, radius)
 
             for link in range(len(self) - 1):
                 if hasattr(self[link], 'W'):

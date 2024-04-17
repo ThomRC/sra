@@ -68,12 +68,12 @@ def settings(input_params):
     # cv_hl_strides = [1, 2, 1, 2]
     
     # Other settings(in_channels < hl1_channels)
-    cv_hl_kernels = [16, 16, 64, 64]
-    cv_hl_ksizes = [4, 3, 4, 3]
-    cv_hl_strides = [2, 1, 2, 1]  
-    # cv_hl_kernels = [8, 8, 16, 16]
+    # cv_hl_kernels = [16, 16, 64, 64]
     # cv_hl_ksizes = [4, 3, 4, 3]
-    # cv_hl_strides = [2, 1, 2, 1]
+    # cv_hl_strides = [2, 1, 2, 1]  
+    cv_hl_kernels = [8, 8, 16, 16]
+    cv_hl_ksizes = [4, 3, 4, 3]
+    cv_hl_strides = [2, 1, 2, 1]
     # 
     # cv_hl_kernels = [3]
     # cv_hl_ksizes = [3]
@@ -86,13 +86,12 @@ def settings(input_params):
         
     cv_config = {'channel': cv_hl_kernels, 'ksize': cv_hl_ksizes, 'stride': cv_hl_strides}
 
-
     # Fully-connected layers
     units = 512  # # OV: 512 units per layer
     in_padding = False # concatenates channels to match the dimension of lower to higher dimensional transformations
-    fc_hl_units = [units]
+    # fc_hl_units = [units]
     # fc_hl_units = [units,units]
-    # fc_hl_units = [units, units, units]
+    fc_hl_units = [units, units, units]
     # fc_hl_units = [units, units, units, units, units, units]
     # IN CASE OF EACH LAYER HAVING DIFFERENT # OF UNITS PLEASE CHANGE IT HERE MANUALLY
 
@@ -132,8 +131,8 @@ def settings(input_params):
     ############################################################################
     # EXPERIMENTAL SETTINGS
     ############################################################################
-    n_exp = 3  # OV = 3 Defines how many trainings are run for each hyperparameter combination
-    n_epoch = 300  # OV - 300 number of epochs for each training
+    n_exp = 2  # OV = 3 Defines how many trainings are run for each hyperparameter combination
+    n_epoch = 140  # OV - 300 number of epochs for each training
     ############################################################################
     # UPDATE ALGORITHM
     ############################################################################
@@ -141,8 +140,8 @@ def settings(input_params):
     adam_beta1 = 0.9  # OV: 0.9
     adam_beta2 = 0.999  # OV: 0.999
     # lr = 0.001  # OV: 0.001 # CIFAR-10
-    lr = 0.005  # OV: 0.001 # CIFAR-10
-    # lr = 0.01  # OV: 0.01 # MNIST
+    # lr = 0.005  # OV: 0.001 # CIFAR-10
+    lr = 0.01  # OV: 0.01 # MNIST
     ############################################################################
     # INITIZALIZATION
     ############################################################################
