@@ -134,7 +134,6 @@ if __name__ == '__main__':
                            'd: margin enforcement hyperparameter \n'
                            'x_var: variance of input Gaussian noise \n'
                            'Mode: \'train\' or \'load\' or \'load_all\' \n'
-                           'Mode: \'train\' or \'load\' or \'load_all\' \n'
                            'gpu: number of gpu to be used')
     else:
         loss = sys.argv[1].lower()

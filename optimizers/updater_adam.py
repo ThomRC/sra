@@ -62,10 +62,8 @@ class Adam:
                     self.lr_sch_epoch *= 2
             elif self.schedule == 'cst':
                 # Constant learning rate
-                # Constant learning rate
                 pass
             elif self.schedule == 'step':
-                # Step learning rate decay
                 # Step learning rate decay
                 if epoch % self.lr_sch_epoch == 0:
                     self.lr_sch *= 0.1
