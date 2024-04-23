@@ -17,6 +17,7 @@ import cupy as cp
 from exp_settings import settings
 import trainers.trainer as trainer
 import measurements.robustness as robustness
+from measurements.utils import list_nets
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID" # In case the GPU order in the bus is different from the one listed by CUDA
 
@@ -31,6 +32,8 @@ def change_gpu(model, gpu):
         if hasattr(model[link], 'W'):
             model[link].W.to_gpu(gpu)
             model[link].ortho_w.to_gpu(gpu)
+            if hasattr(model[link], "kernel_size"):
+                model[link].mask.to_gpu(gpu)
         if hasattr(model[link], 'b') and model[link].b is not None:
             model[link].b.to_gpu(gpu)
 
@@ -133,27 +136,32 @@ if __name__ == '__main__':
                            'loss: loss functions to be used \n'
                            'd: margin enforcement hyperparameter \n'
                            'x_var: variance of input Gaussian noise \n'
-                           'Mode: \'train\' or \'load\' or \'load_all\' \n'
+                           'Mode: \'train\', \'load\', \'load_all\' or \'interact\' \n'
                            'gpu: number of gpu to be used')
     else:
-        loss = sys.argv[1].lower()
-        d = float(sys.argv[2])
-        x_var = float(sys.argv[3])
-        mode = sys.argv[4].lower()
         gpu = int(sys.argv[5])
-
-    cp.cuda.Device(gpu).use()
-    d = cp.asarray(d, dtype=cp.float32)
-    x_var = cp.asarray(x_var, dtype=cp.float32)
+        cp.cuda.Device(gpu).use()
+        loss = sys.argv[1].lower()
+        d = cp.asarray(float(sys.argv[2]), dtype=cp.float32)
+        x_var = cp.asarray(float(sys.argv[3]), dtype=cp.float32)
+        mode = sys.argv[4].lower()
+        
+    if mode not in {'train', 'load', 'load_all', 'interact'}:
+        raise RuntimeError('Mode should be \'train\', \'load\', \'load_all\' or \'interact\'. You entered {mode} \n'
+                           'train: carries out training given settings in exp_settings.py file\n'
+                           'load: loads and carries out measurements of trained nets with architecture defined in exp_settings.py AND loss and hyperparameters given as arguments\n'
+                           'load_all: loads and carries out measurements of all trained nets with architecture defined in exp_settings.py\n')
+        
+    input_params = {'loss': loss, 'd': d, 'x_var': x_var, 'gpu': gpu}
     
     while True:
-        mode, kwargs = settings()
+        kwargs = settings(input_params)
         if mode == 'train':
             print('### You entered training mode')
             args = experiment_routine(**kwargs)
             sys.exit("Exiting training")
 
-        elif mode == 'load' or mode == 'load_all':
+        elif mode in {'load', 'load_all', 'interact'}:
             print('### You entered load mode. In this mode the robustness measurements will be carried for the specified trained NN')
             # Load trained nets from trained nets folder for specified dataset and architecture file so that the
             # robustness and performance metrics can be computed
@@ -166,18 +174,22 @@ if __name__ == '__main__':
                     break
 
             while True:
-                curr_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
-                measures_save_dir = curr_dir + "/measurements/{}/".format(kwargs['dataset']) + "{}/".format(kwargs['arch'])
+                _, curr_fold = os.path.split(kwargs['net_save_dir'])
+                curr_dir, _ = os.path.split(os.path.dirname(os.path.realpath(__file__)))
+                measures_save_dir = curr_dir + "/measurements/{}/".format(kwargs['dataset']) + "{}/{}/".format(kwargs['arch'],curr_fold)
+                print(measures_save_dir)
                 if not os.path.isdir(measures_save_dir[0:-1]):
                     os.makedirs(measures_save_dir[0:-1])
-
-                filelist = robustness.list_nets(kwargs['net_save_dir'], loss = loss, d = d, x_var = x_var, load_mode = mode)
+                
+                curr_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
+                filelist = list_nets(kwargs['net_save_dir'], loss = loss, d = d, x_var = x_var, load_mode = mode)
                 print(filelist)
                 # loops through all files in the .csv file
                 for file in filelist:
                     net_path = file
                     print(kwargs['net_save_dir'])
                     print(measures_save_dir)
+                    print(file)
                     kwargs_load = {'exp_count': None, 'success': None, 'data_save_dir': None}
                     kwargs = {**kwargs, **kwargs_load}
                     # Builds NNAgent object with architecture settings
@@ -194,13 +206,15 @@ if __name__ == '__main__':
                     x_m = Variable(network.te_x)
                     target = Variable(network.te_y)
 
-                    # Parses the trained NN settings type of loss, x_var, d, training epochs and training number from the file name
-                    # code.interact(local=locals())
+                    # Gets the trained NN settings type of loss, x_var, d, training epochs and training number from the file name
                     loss = re.search('loss_(.*)_ep', net_path).group(1)
                     epochs = re.search('_ep_(.*)_x_var', net_path).group(1)
-                    x_var = float(re.search('x_var_(.*)_d', net_path).group(1))
-                    d = float(re.search('{}_d_(.*)_'.format(x_var), net_path).group(1))
+                    x_var = re.search('x_var_(.*)_d', net_path).group(1)
+                    d = re.search('{}_d_(.*)_'.format(x_var), net_path).group(1)
                     training_num = float(re.search('_d_{}_(.*)'.format(d), net_path).group(1))
+                    x_var = float(x_var)
+                    d = float(d)
+                    
                     arch = network.model.arch
                     network.loss = loss
                     network.epochs = epochs
@@ -211,10 +225,20 @@ if __name__ == '__main__':
 
                     # Sets the Bjorck orthogonalization settings for each layer
                     for j in range(len(network.model)):
-                        network.model[j].config['dynamic_iter'] = True
-                        network.model[j].dynamic_iter = True
-
+                        if hasattr(network.model[j], 'W'):
+                            network.model[j].config['dynamic_iter'] = True
+                            network.model[j].dynamic_iter = True
+                    
+                    network.model.ortho_iter_red()
+                    
+                    if mode == 'interact':
+                        code.interact(banner="Loaded in interactive mode:", local=locals())
+                    
                     # Performance and robustness measurements
-                    robustness.measurements(network, x_m, target, measures_save_dir)
+                    robust_msr = True
+                    num_int = False
+                    sample_est = False
+                    rs_cr = False
+                    robustness.measurements(network, x_m, target, measures_save_dir, robustness = robust_msr, num_int = num_int, sample_est = sample_est, rs_cr = rs_cr)
 
                 sys.exit("Finished the data collection of robustness measurements")

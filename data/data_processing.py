@@ -17,7 +17,7 @@ def normalize(x, axis):
     return norm_x
 
 def mnist_preprocessing(train_data = 60000, test_data = 10000, intvl_data = 2., in_center = 1., tr_idx = None, te_idx = None, norm = False, arch = 'mlp'):
-    """ Iniotializes the MNIST dataset
+    """ Initializes the MNIST dataset
 
     Args:
         train_data: size of training data to be used (<= 60000)

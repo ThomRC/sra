@@ -1,3 +1,11 @@
+"""
+Code from Cem Anil adapted to be used with Chainer, and added the iter_red function that dynamically changes the Bjorck iterations:
+https://github.com/cemanil/LNets/blob/master/lnets/models/layers/dense/bjorck_linear.py
+
+Cem Anil, James Lucas, Roger Grosse. "Sorting Out Lipschitz Function Approximation"
+Proceedings of the 36th International Conference on Machine Learning (2019)
+"""
+
 import typing as tp  # NOQA
 
 import chainer.functions as F
@@ -12,7 +20,7 @@ class BjorckLinear(DenseLinear, Adam):
         Adam.__init__(self, **kwargs)
         self.config = config
         self.ortho_w = None
-        self.iter = 0
+        self.iter = self.config['iter']
         self.dynamic_iter = config['dynamic_iter']
 
     def forward(self, x, n_batch_axes: int = 1, train = False):
@@ -26,30 +34,12 @@ class BjorckLinear(DenseLinear, Adam):
         Returns: the multiplication of the orthogonalized matrix and the previous layer activation
 
         """
-        # if not hasattr(self, 'iter'):
-        #     self.iter = self.config['iter']
-
         if self.W.array is None:
             in_size = utils.size_of_shape(x.shape[n_batch_axes:])
             self._initialize_params(in_size)
 
         if train:
             self.orthonormalize()        
-        elif self.iter == 0:
-            self.iter = min_ortho_iter(self.W,
-                                           beta=self.config['beta'],
-                                           iters=self.config['iter'],
-                                           order=self.config['order'], first = False)
-            self.orthonormalize()
-        elif self.dynamic_iter:
-            # If dynamic_iter = True adapts every 10 epochs the number of iterations layerwise for BO to avoid unnecessary iterations
-            if self.last_epoch % 10 == 0 and self.last_epoch > 0:
-                self.iter = min_ortho_iter(self.W,
-                                           beta=self.config['beta'],
-                                           iters=self.iter,
-                                           order=self.config['order'])
-                print(self.iter)
-
         return F.linear(x, self.ortho_w, self.b, n_batch_axes=n_batch_axes)
 
     def orthonormalize(self):
@@ -60,8 +50,16 @@ class BjorckLinear(DenseLinear, Adam):
         else:
             scaling = 1.0
 
-        self.ortho_w = bjorck_orthonormalize(self.W.T / scaling,
+        self.ortho_w = bjorck_orthonormalize(self.W / scaling,
                                              beta=self.config['beta'],
                                              iters=self.iter,
-                                             order=self.config['order']).T
+                                             order=self.config['order'])
         return
+
+    def iter_red(self):
+        # Call the function min_ortho_iter for the current layer, which obtains the minimal number of iterations required to have an approximately orthogonal layer
+        self.iter = min_ortho_iter(self.W,
+                                        beta=self.config['beta'],
+                                        iters=self.iter,
+                                        order=self.config['order'])
+        print(self.iter)

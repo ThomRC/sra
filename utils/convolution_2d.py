@@ -1,3 +1,6 @@
+"""
+Modification of the original convolution_2d.py from Chainer to force cudnn to be disabled since it was resulting in non-orthogonality
+"""
 import numpy
 
 import chainer
@@ -21,7 +24,6 @@ def _pair(x):
     if hasattr(x, '__getitem__'):
         return x
     return x, x
-
 
 # Used by deconvolution_2d.py.
 # TODO(beam2d): Unify matmul implementations

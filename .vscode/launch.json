@@ -11,7 +11,7 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": ["mscr", "1.0", "0.1", "train", "2"],
+            "args": ["zhen", "15.0", "0.08", "train", "3"],
             "env": {"PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "100"}
         }
     ]

@@ -23,27 +23,22 @@ class ReluMean(function_node.FunctionNode):
         raise NotImplementedError()
 
     def forward_gpu(self, inputs):
-        eps = 10**-14 # numerical stability constant
+        eps = 10**-8 # numerical stability constant
         self.retain_inputs((0, 1))
         mean_s, var_s = inputs
-        alpha = mean_s/(cp.sqrt(2*var_s + eps))
-        alpha_erf = erf(alpha)
-        term1_mean = cp.sqrt(0.5*var_s/cp.pi) * cp.exp(-alpha**2)
-        term2_mean = mean_s * (1 + alpha_erf) * 0.5
+        term1_mean = cp.sqrt(0.5*var_s/cp.pi) * cp.exp(-mean_s**2/(2*var_s + eps))
+        term2_mean = mean_s * (1 + erf(mean_s/cp.sqrt(2*var_s + eps))) * 0.5
         return term1_mean + term2_mean,
 
     def backward(self, indexes, grad_outputs):
-        eps = 10**-14 # numerical stability constant
+        eps = 10**-8 # numerical stability constant
         gy, = grad_outputs
         mean_s, var_s = self.get_retained_inputs()
         mean_s = mean_s.array
         var_s = var_s.array
 
-        alpha = mean_s/(cp.sqrt(2*var_s + eps))
-        alpha_erf = erf(alpha)
-        gmean_s = gy * (1 + alpha_erf) * 0.5
-        gvar_s = gy * cp.exp(-alpha**2)/(cp.sqrt(8*cp.pi*var_s + eps))
-
+        gmean_s = gy * (1 + erf(mean_s/(cp.sqrt(2*var_s + eps)))) * 0.5
+        gvar_s = gy * cp.exp(-mean_s**2/(2*var_s + eps))/(cp.sqrt(8*cp.pi*var_s + eps))
         return gmean_s, gvar_s
 
 class ReluVar(function_node.FunctionNode):

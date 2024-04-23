@@ -1,5 +1,5 @@
 import typing as tp  # NOQA
-
+import code
 import cupy as cp
 import numpy as np
 import chainer
@@ -54,7 +54,7 @@ class FeedForwardNN(chainer.ChainList):
 
         if kwargs['ortho_ws']:
             from models.layers.bjorck_linear import BjorckLinear as LinearLink
-            print('Training with orthogonal weights')
+            print('NN with orthogonal layers')
             if self.arch == 'cnn':
                 from models.layers.ortho_conv2d import BCOP
                 from models.layers.invertible_downsampling import InvertibleDownsampling2d
@@ -99,10 +99,9 @@ class FeedForwardNN(chainer.ChainList):
                     else:
                         self.add_link(LinearLink(args[i], **kwargs).to_gpu())
                 
-
             self.add_link(LinearLink(n_out, config = self.bjorck_config, **kwargs).to_gpu())
 
-    def __call__(self, x, y = None, norm_out = False, train = True):
+    def __call__(self, x, y = None, norm_out = False, train = False):
         """ Carries the forward pass over each element of the NN object under the specified activation function"""
         h = x
         for link in range(len(self) - 1):
@@ -113,6 +112,11 @@ class FeedForwardNN(chainer.ChainList):
                 h = self[link](h)
         h = self[link + 1](h, train = train)
         return h
+
+    def ortho_iter_red(self):
+        for link in range(len(self)):
+            if hasattr(self[link], 'W') and self[link].dynamic_iter:
+                self[link].iter_red()
 
     def grad_norm(self):
         """ Obtain the l2-norm of the gradient to be used in the update_net function to avoid exploding gradients"""
@@ -198,6 +202,43 @@ class FeedForwardNN(chainer.ChainList):
             h = self[link + 1](h, train = train) # If train = True it orthogonalizes the weights and we can take the gradients of the weights
 
             return F.accuracy(h, target).array
+
+    def output_sampling(self, x, sd, samples = 100, dist='Normal', radius=0.3):
+        """ Obtains samples of the output layer for a single input
+
+        Args:
+            x: array of inputs subject to classification
+            sd: standard deviation of the isotropic Gaussian noise to be added to the input
+            samples: number of samples to be takes for the estimate
+            dist: isotropic distribution to be used. Can be either 'Normal' or 'Uniform'
+            radius: for the case of 'Uniform', radius is half the interval
+
+        Returns:
+            (samples, n_classes) matrix
+
+        """
+        
+        # Using no_backprop_mode method since it is just required to forward the input through the network, and not to build a computational graph to apply the backprop
+        out = self.xp.zeros((samples, 10))
+        # x = x.array
+        # x = self.xp.expand_dims(x, 0)
+        if len(x.shape) == 3:
+            x = cp.repeat(cp.expand_dims(x.array,0), samples, 0)
+        # x_ext = self.xp.repeat(x.array, samples, -1)
+        with no_backprop_mode():
+            # for i in range(samples):
+            h = x + self.noise_inj(x, sd, dist, radius)
+
+            for link in range(len(self) - 1):
+                if hasattr(self[link], 'W'):
+                    h = activation(self[link](h))
+                else:
+                    h = self[link](h)
+
+            h = self[link + 1](h)
+            # out[i,:] = h.array.squeeze()
+            out = h.array
+            return out
 
     def emp_prob(self, x, target, sd, samples = 100, dist = 'Normal', radius = 0.3):
         """ Obtains a sample estimate of probability of correct classification
@@ -303,6 +344,11 @@ class FeedForwardNN(chainer.ChainList):
         Returns: a self.xp ndarray with same shape as the input containing the adversarial examples computed with PGD
 
         """
+        import copy
+        aux_shape = [x.shape[0]] # holds array that will contain the broadcasted ndarray with first dimension equals to the number of still correctly classified inputs
+        for _ in range(len(x.shape)-1): aux_shape.append(1)
+        aux_shape2 = copy.copy(aux_shape)
+        
         x_adv = Variable(self.xp.copy(x.array))
         targeted = y_target is not None
         delta_x = self.xp.random.uniform(-eps*pert_scale, eps*pert_scale, x_adv.array.shape).astype('float32')
@@ -324,42 +370,45 @@ class FeedForwardNN(chainer.ChainList):
                 # Forces the gradient step to be at most a fixed size in a specified norm step_norm
                 if step_norm == 'sign':
                     ### Calculates the gradient for attacks with l_inf ball attacks, i.e., FGSM
-                    gradients = self.xp.sign(_x_adv.grad/len(target)) * step_size
+                    gradients = self.xp.sign(_x_adv.grad) * step_size
                 elif step_norm == 'inf':
                     ### Calculates the gradient for attacks with l_1 ball attacks
-                    # linf_norm_pos = np.linalg.norm(cuda.to_cpu(_x_adv.grad[:, 0:self.n_in]/len(target)), ord = np.inf, axis = 1) > 0
-                    linf_norm_pos = cp.linalg.norm(_x_adv.grad[:, 0:self.n_in]/len(target), ord = cp.inf, axis = 1) > 0
-                    max_idx = _x_adv.grad[:, 0:self.n_in].argmax(axis=1)/len(target)
-                    # max_mat = cuda.to_cpu(self.xp.zeros_like(_x_adv.grad[:, 0:self.n_in]/len(target), dtype = 'bool'))
-                    max_mat = cp.zeros_like(_x_adv.grad[:, 0:self.n_in]/len(target), dtype = 'bool')
+                    # linf_norm_pos = np.linalg.norm(cuda.to_cpu(_x_adv.grad), ord = np.inf, axis = 1) > 0
+                    linf_norm_pos = cp.linalg.norm(_x_adv.grad, ord = cp.inf, axis = 1) > 0
+                    max_idx = _x_adv.grad.argmax(axis=1)
+                    # max_mat = cuda.to_cpu(self.xp.zeros_like(_x_adv.grad, dtype = 'bool'))
+                    max_mat = cp.zeros_like(_x_adv.grad, dtype = 'bool')
                     # max_mat[linf_norm_pos,cuda.to_cpu(max_idx[linf_norm_pos]).tolist()] = True
                     max_mat[linf_norm_pos,max_idx[linf_norm_pos].tolist()] = True
-                    gradients = self.xp.clip(_x_adv.grad[:, 0:self.n_in]/len(target), a_min = -1, a_max = +1) ## projection to 1-radius l-inf ball
+                    gradients = self.xp.clip(_x_adv.grad, a_min = -1, a_max = +1) ## projection to 1-radius l-inf ball
                     gradients[max_mat] = self.xp.sign(gradients[max_mat])  ## if inside the l-inf ball, projection onto the 1-radius l-inf sphere
                     gradients *=  step_size ## scale according to step size
                 elif step_norm == '2':
                     ### Calculates the gradient for attacks with l_2 ball attacks
-                    grad_norm = self.xp.linalg.norm(_x_adv.grad[:, 0:self.n_in]/len(target), ord = 2, axis = 1).reshape((-1,1))
+                    # gradients = _x_adv.grad * step_size / _x_adv.grad.view(_x_adv.shape[0], -1).norm(step_norm, dim=-1).view(-1, num_channels, 1, 1)
+                    
+                    grad_norm = self.xp.linalg.norm(_x_adv.grad.reshape((_x_adv.shape[0], -1)), ord = 2, axis = 1).reshape((-1, 1))
                     non_zero_idx = grad_norm != 0
-                    indices = np.arange(len(target)).reshape((-1,1))  # cp -> np
-                    gradients = (_x_adv.grad/len(target)) * step_size
-                    gradients[indices[non_zero_idx],:] = gradients[indices[non_zero_idx],:]/grad_norm[non_zero_idx].reshape((-1,1))
+                    indices = cp.arange(len(target)).reshape((-1,1))  # cp -> np
+                    gradients = (_x_adv.grad) * step_size
+                    aux_shape[0] = indices[non_zero_idx].shape[0]
+                    gradients[indices[non_zero_idx],:] = gradients[indices[non_zero_idx],:]/grad_norm[non_zero_idx].reshape(aux_shape)
 
                 if targeted:
                     # Targeted attack: Gradient descent with on the loss of the (incorrect) target label w.r.t. the image data
-                    x_adv.array[:, 0:self.n_in] -= gradients[:, 0:self.n_in]
+                    x_adv.array -= gradients
                 else:
                     # Untargeted attack: Gradient ascent on the loss of the correct label w.r.t. the model parameters
-                    x_adv.array[:, 0:self.n_in] += gradients[:, 0:self.n_in]
+                    x_adv.array += gradients
 
             # Project back into l_norm ball and correct range
             if eps_norm == 'inf':
-                x_adv.array[:, 0:self.n_in] = self.xp.clip(x_adv.array[:, 0:self.n_in], a_max = x.array[:, 0:self.n_in] + eps, a_min = x.array[:, 0:self.n_in] - eps)
+                x_adv.array = self.xp.clip(x_adv.array, a_max = x.array + eps, a_min = x.array - eps)
             elif eps_norm == '2':
                 delta = x_adv.array - x.array
                 # Assume x and x_adv are batched tensors where the first dimension is a batch dimension
                 scaling_factor = self.xp.clip(self.xp.linalg.norm(delta.reshape((delta.shape[0], -1)), ord = 2, axis=1), a_min = eps)
-                delta *= eps / scaling_factor.reshape((-1, 1))
+                delta *= eps / scaling_factor.reshape(aux_shape2)
                 x_adv.array = x.array + delta
             x_adv.array = self.xp.clip(x_adv.array, a_min = clamp[0], a_max = clamp[1])
 
