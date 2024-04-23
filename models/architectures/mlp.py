@@ -61,6 +61,7 @@ class FeedForwardNN(chainer.ChainList):
         else:
             from chainer.links import Linear as LinearLink
             print('Training with non-orthogonal weights')
+            print('Training with non-orthogonal weights')
 
         if not all(isinstance(x, int) for x in args):
             raise RuntimeError('Number of units in a layer must all be integers.')

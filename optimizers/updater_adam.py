@@ -62,8 +62,10 @@ class Adam:
                     self.lr_sch_epoch *= 2
             elif self.schedule == 'cst':
                 # Constant learning rate
+                # Constant learning rate
                 pass
             elif self.schedule == 'step':
+                # Step learning rate decay
                 # Step learning rate decay
                 if epoch % self.lr_sch_epoch == 0:
                     self.lr_sch *= 0.1
@@ -100,7 +102,3 @@ class Adam:
                 self.W.array -= self.lr_sch * self.lr * self.adam_grad
             
             self.counter += 1
-
-
-# for _ in range(1, ksize - 1):
-#     p = matrix_conv(p, block_orth(sym_projs[_ * 2], sym_projs[_ * 2 + 1]))

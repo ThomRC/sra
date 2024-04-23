@@ -134,6 +134,7 @@ if __name__ == '__main__':
                            'd: margin enforcement hyperparameter \n'
                            'x_var: variance of input Gaussian noise \n'
                            'Mode: \'train\' or \'load\' or \'load_all\' \n'
+                           'Mode: \'train\' or \'load\' or \'load_all\' \n'
                            'gpu: number of gpu to be used')
     else:
         loss = sys.argv[1].lower()
@@ -167,8 +168,6 @@ if __name__ == '__main__':
 
             while True:
                 curr_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
-                print(curr_dir)
-                print(curr_fold)
                 measures_save_dir = curr_dir + "/measurements/{}/".format(kwargs['dataset']) + "{}/".format(kwargs['arch'])
                 if not os.path.isdir(measures_save_dir[0:-1]):
                     os.makedirs(measures_save_dir[0:-1])
