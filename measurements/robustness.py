@@ -8,11 +8,11 @@ import numpy as np
 import utils.stats_func as utils
 from multiprocessing import Pool
 
-from noise_robustness import gaussian_noise_acc
-from adversarial_attack import linf_pgd, l2_pgd
-from robustness_certification import cohen_cr, lip_cr
-from other import ssnr_eval_acc
-from utils import save_measurements
+from measurements.noise_robustness import gaussian_noise_acc
+from measurements.adversarial_attack import linf_pgd, l2_pgd
+from measurements.robustness_certification import cohen_cr, lip_cr
+from measurements.other import ssnr_eval_acc
+from measurements.utils import save_measurements
 
 def adversarial_eval(network, x, target, name_str):
     """ Empirical external perturbation evaluations (L2 and Linf PGD attacks, Gaussian noise perturbation) and SSNR linear corruption)
@@ -101,7 +101,7 @@ def other_eval(network, x, target, name_str):
     print("Exe. time = {}".format(time.perf_counter() - start_time))
     return noise_acc, ssnr_acc
 
-def numeric_eval(network, x, target):
+def numerical_eval(network, x, target):
     """ Obtain through numerical integration the variables required to certify the robustness for different input sd
 
     Args:
@@ -260,7 +260,7 @@ def measurements(network, x, target, dest, robustness = True, num_int = True, sa
 
     if num_int:
         if any(not os.path.isfile(name_str + measurement) for measurement in ['p_c.npy', 'p_ru.npy', 'smooth_margin.npy', 'mean_out.npy', 'var_out.npy']):
-            measurements_dict['p_c'], measurements_dict['p_ru'], measurements_dict['smooth_margin'], measurements_dict['mean_out'], measurements_dict['var_out'] = numeric_eval(network, corr_x, cuda.to_cpu(corr_t.array))
+            measurements_dict['p_c'], measurements_dict['p_ru'], measurements_dict['smooth_margin'], measurements_dict['mean_out'], measurements_dict['var_out'] = numerical_eval(network, corr_x, cuda.to_cpu(corr_t.array))
         else:   
             print("Files found for current settings. Skipping the numerical integration of classification probability and smoothed margin.")
 

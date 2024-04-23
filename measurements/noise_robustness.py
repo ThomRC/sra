@@ -1,6 +1,5 @@
 import cupy as cp
 
-
 def gaussian_noise_acc(network, x, target):
     """ Measures the accuracy under Gaussian noise with with gradual increments of noise variance until average accuracy reaches 1/c, where c is the number of output classes
 
@@ -31,7 +30,6 @@ def gaussian_noise_acc(network, x, target):
         aux = cp.zeros(samples)
         for i in range(samples):
             aux[i] = network.model.validation(x, target, noise_in=True, sd=sd, train=False)
-            # print("Noise accuracy for sd = {} is {} #{}".format(sd, aux[i], i))
 
         noise_acc.append(cp.asarray(aux).mean())
 

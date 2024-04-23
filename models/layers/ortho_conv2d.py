@@ -1,13 +1,17 @@
 """
-BCOP parameterization with block convolution procedure adapted from the official Tensorflow repo:
-https://github.com/tensorflow/tensorflow/blob/r1.15/tensorflow/python/ops/init_ops.py#L683
+Code from Qiyang Li just adapted to be used with Chainer:
+https://github.com/ColinQiyangLi/LConvNet/blob/master/lconvnet/layers/bcop.py
+
+Original work:
+Qiyang Li, Saminul Haque, Cem Anil, James Lucas, Roger Grosse, Jörn-Henrik Jacobsen. "Preventing Gradient Attenuation in Lipschitz Constrained Convolutional Networks"
+33rd Conference on Neural Information Processing Systems (NeurIPS 2019)
 """
+
 from chainer import link, variable, initializers
 import chainer.functions as F
 import numpy as np
 import cupy as cp
 import einops
-import code
 
 from optimizers.updater_adam import Adam
 from utils.conv_utils import conv2d_cyclic_pad
@@ -83,13 +87,8 @@ def matrix_conv(m1, m2):
     return F.reshape(F.stack(result),(size,size,n,n))
 
 def convolution_orthogonal_generator_projs(ksize, cin, cout, ortho, sym_projs):
-    # flipped = False
     if cin < cout:
-        # flipped = True
-        # cin, cout = cout, cin
         ortho = cp.identity(cout)
-    # else:
-    #     ortho = cp.identity(cout)
     if ksize == 1:
         return ortho.reshape(1,1,ortho.shape[0],ortho.shape[1])
     
@@ -101,38 +100,7 @@ def convolution_orthogonal_generator_projs(ksize, cin, cout, ortho, sym_projs):
     p = p[:, :, :, 0:cin]    
     p = einops.rearrange(p, 'k1 k2 cout cin -> cout cin k2 k1')
 
-    # if flipped:
-    #     return F.moveaxis(p, (0,2), (1,3))
     return p
-
-def convolution_orthogonal_generator(ksize, cin, cout, P, Q):
-    flipped = False
-    if cin > cout:
-        flipped = True
-        cin, cout = cout, cin
-    ortho = orthogonal_matrix(cout)[0:cin, :] # cin x cout orthogonal matrix, where cin <= cout
-    if ksize == 1:
-        return ortho.reshape(1,1,ortho.shape[0],ortho.shape[1])
-
-    p = block_orth(symmetric_projection(cout, P[0]), symmetric_projection(cout, Q[0]))
-    for _ in range(ksize - 2):
-        p = matrix_conv(p, block_orth(symmetric_projection(cout, P[_ + 1]), symmetric_projection(cout, Q[_ + 1])))
-
-    p = ortho.reshape(1,1,ortho.shape[0],ortho.shape[1]) @ p
-    p = einops.rearrange(p, '(h k1) (w k2) -> h w k1 k2', k1=ksize, k2=ksize)
-
-    if flipped:
-        return p
-    return F.moveaxis(p, (0,2), (1,3))
-
-def convolution_orthogonal_initializer(ksize, cin, cout):
-    P, Q = [], []
-    cmax = max(cin, cout)
-    for _ in range(ksize - 1):
-        P.append(orthogonal_matrix(cmax))
-        Q.append(orthogonal_matrix(cmax))
-    P, Q = F.stack(P), F.stack(Q)
-    return convolution_orthogonal_generator(ksize, cin, cout, P, Q)
 
 class BCOP(link.Link, Adam):
     def __init__(
@@ -146,8 +114,6 @@ class BCOP(link.Link, Adam):
         config=None, 
         **kwargs
     ):
-        # super().__init__()
-        # super(BCOP, self).__init__()
         super().__init__()
         assert stride == 1, "BCOP convolution only supports stride 1."
         assert padding is None or padding == kernel_size // 2, "BCOP convolution only supports k // 2 padding. actual - {}, required - {}".format(padding, kernel_size // 2)
@@ -169,9 +135,7 @@ class BCOP(link.Link, Adam):
         with self.init_scope():
             # Define the unconstrained matrices Ms and Ns for Ps and Qs
             scale = 1.0 / (self.max_channels ** 0.5)
-            # initializer = initializers._get_initializer(initializers.Orthogonal(scale=scale))
             ### Note: calling the main parameter tensor as W so that the child class Adam can handle it across different kinds of layers
-            # self.W = [variable.Parameter(initializer, (self.max_channels, self.max_channels)) for _ in range(self.num_kernels)]
             self.W = variable.Parameter(cp.asarray([scale * orthogonal_matrix(self.max_channels) for _ in range(self.num_kernels)]).astype(dtype=cp.float32))
             
             # Bias parameters in the convolution
@@ -184,7 +148,6 @@ class BCOP(link.Link, Adam):
             else:
                 self.b = None  # type: tp.Optional[variable.Variable]
 
-            
             # The mask controls the rank of the symmetric projectors (full half rank).
             self.mask = variable.Variable(cp.concatenate((cp.ones((1, 1, self.max_channels // 2)),
                     cp.zeros((1, 1, self.max_channels - self.max_channels // 2))), axis = -1).astype(dtype=cp.float32)) # CHECK LATER if I need .astype("float32")
@@ -213,7 +176,6 @@ class BCOP(link.Link, Adam):
 
         # compute the symmetric projectors
         H = ortho[0, : self.out_channels, : self.in_channels]
-        # H = ortho[0]
         PQ = ortho[1:]
         PQ = PQ * self.mask
         PQ = PQ @ F.moveaxis(PQ, -1, -2)
@@ -234,10 +196,6 @@ class BCOP(link.Link, Adam):
         Returns:
 
         """
-        # if self.W.array is None:
-        #     in_size = utils.size_of_shape(x.shape[n_batch_axes:])
-        #     self._initialize_params(in_size)
-
         if w_grad:
             self.orthonormalize() # carries orthonormalization only in the case of needing the W gradients
             W = self.ortho_w

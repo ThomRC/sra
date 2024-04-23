@@ -53,47 +53,25 @@ def settings(input_params):
     arch = 'cnn' # 'mlp' or 'cnn'
     # arch = 'mlp' # 'mlp' or 'cnn'
 
-    # Settings of convolutional layers
-    # mnist
-    # cv_hl_kernels = [4, 4, 16, 16]
-    # cv_hl_ksizes = [4, 2, 4, 2]
-    # cv_hl_strides = [2, 1, 2, 1]
-    # cv_hl_kernels = [16, 16, 64, 64]
-    # cv_hl_ksizes = [8, 3, 4, 3]
-    # cv_hl_strides = [4, 1, 2, 1]
-    # cifar10
-    # Original paper settings (in_channels < hl1_channels)
-    # cv_hl_kernels = [32, 32, 64, 64]
-    # cv_hl_ksizes = [3, 4, 3, 4]
-    # cv_hl_strides = [1, 2, 1, 2]
-    
-    # Other settings(in_channels < hl1_channels)
-    # cv_hl_kernels = [16, 16, 64, 64]
-    # cv_hl_ksizes = [4, 3, 4, 3]
-    # cv_hl_strides = [2, 1, 2, 1]  
-    cv_hl_kernels = [8, 8, 16, 16]
-    cv_hl_ksizes = [4, 3, 4, 3]
-    cv_hl_strides = [2, 1, 2, 1]
-    # 
-    # cv_hl_kernels = [3]
-    # cv_hl_ksizes = [3]
-    # cv_hl_strides = [1]
-    
-    if arch == 'mlp':
+    units = 512  # # OV: 512 units per layer
+    in_padding = False # concatenates channels to match the dimension of lower to higher dimensional transformations
+
+
+    # IN CASE OF EACH LAYER HAVING DIFFERENT # OF UNITS PLEASE CHANGE IT LIKE
+    # fc_hl_units = [units1, units2, units3, ...]
+    # E.g.: fc_hl_units = [500, 400, 300, 200, 100]    
+    if arch == 'cnn':
+        cv_hl_kernels = [8, 8, 16, 16]
+        cv_hl_ksizes = [4, 3, 4, 3]
+        cv_hl_strides = [2, 1, 2, 1]
+        fc_hl_units = [units]
+    elif arch == 'mlp':
         cv_hl_kernels = []
         cv_hl_ksizes = []
         cv_hl_strides = []  
-        
-    cv_config = {'channel': cv_hl_kernels, 'ksize': cv_hl_ksizes, 'stride': cv_hl_strides}
+        fc_hl_units = [units, units, units]
 
-    # Fully-connected layers
-    units = 512  # # OV: 512 units per layer
-    in_padding = False # concatenates channels to match the dimension of lower to higher dimensional transformations
-    # fc_hl_units = [units]
-    # fc_hl_units = [units,units]
-    fc_hl_units = [units, units, units]
-    # fc_hl_units = [units, units, units, units, units, units]
-    # IN CASE OF EACH LAYER HAVING DIFFERENT # OF UNITS PLEASE CHANGE IT HERE MANUALLY
+    cv_config = {'channel': cv_hl_kernels, 'ksize': cv_hl_ksizes, 'stride': cv_hl_strides}
 
     bias = False  # OV: False
     initial_bias = None  # OV: None
@@ -131,8 +109,8 @@ def settings(input_params):
     ############################################################################
     # EXPERIMENTAL SETTINGS
     ############################################################################
-    n_exp = 2  # OV = 3 Defines how many trainings are run for each hyperparameter combination
-    n_epoch = 140  # OV - 300 number of epochs for each training
+    n_exp = 3  # OV = 3 Defines how many trainings are run for each hyperparameter combination
+    n_epoch = 300  # OV - 300 number of epochs for each training
     ############################################################################
     # UPDATE ALGORITHM
     ############################################################################

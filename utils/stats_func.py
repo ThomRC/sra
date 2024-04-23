@@ -6,7 +6,8 @@ import scipy.special as special
 import numpy as np
 np.random.seed(0)
 
-""" Functions required for the numerical integrations """
+""" Functions required to obtain the probability of correct classification and 
+                                expected margin through numerical integrations """
 
 def corr_prob_func(x, mean, var, mean_c, var_c):
     """ Function to calculate the classification probability by numerical integration  """

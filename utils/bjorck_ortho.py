@@ -1,3 +1,11 @@
+"""
+Code from Qiyang Li just adapted to be used with Chainer and added the min_ortho_iter function:
+https://github.com/ColinQiyangLi/LConvNet/blob/master/lconvnet/layers/utils.py
+
+Qiyang Li, Saminul Haque, Cem Anil, James Lucas, Roger Grosse, Jörn-Henrik Jacobsen. "Preventing Gradient Attenuation in Lipschitz Constrained Convolutional Networks"
+33rd Conference on Neural Information Processing Systems (NeurIPS 2019)
+"""
+
 import typing as tp  # NOQA
 
 import cupy as cp

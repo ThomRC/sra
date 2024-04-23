@@ -17,7 +17,7 @@ import cupy as cp
 from exp_settings import settings
 import trainers.trainer as trainer
 import measurements.robustness as robustness
-from measurements.robustness.utils import list_nets
+from measurements.utils import list_nets
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID" # In case the GPU order in the bus is different from the one listed by CUDA
 
@@ -206,8 +206,7 @@ if __name__ == '__main__':
                     x_m = Variable(network.te_x)
                     target = Variable(network.te_y)
 
-                    # Parses the trained NN settings type of loss, x_var, d, training epochs and training number from the file name
-                    # code.interact(local=locals())
+                    # Gets the trained NN settings type of loss, x_var, d, training epochs and training number from the file name
                     loss = re.search('loss_(.*)_ep', net_path).group(1)
                     epochs = re.search('_ep_(.*)_x_var', net_path).group(1)
                     x_var = re.search('x_var_(.*)_d', net_path).group(1)

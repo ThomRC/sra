@@ -7,7 +7,6 @@ from chainer import link, variable, initializers, types, utils
 from models.activations.relu_moments import relu_moments
 
 class DenseLinear(link.Link):
-
     def __init__(self,
                  in_size: tp.Optional[int],
                  out_size: tp.Optional[int] = None,
@@ -44,10 +43,6 @@ class DenseLinear(link.Link):
     def forward(self, x):
         raise NotImplementedError
 
-    def extra_repr(self):
-        return 'in_size={}, out_size={}, bias={}'.format(
-            self.in_size, self.out_size, self.b is not None)
-
     def relu_moment_propagation(self, x_m, x_v, w_grad = False, layer_num = None, x_var = None):
         """ Computes the pre-activation's mean and variance vectors and calls the relu_moments function
 
@@ -59,9 +54,6 @@ class DenseLinear(link.Link):
         Returns:
 
         """
-        # if self.W.array is None:
-        #     in_size = utils.size_of_shape(x.shape[n_batch_axes:])
-        #     self._initialize_params(in_size)
 
         if w_grad:
             self.orthonormalize() # carries orthonormalization only in the case of needing the W gradients

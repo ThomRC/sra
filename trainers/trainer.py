@@ -4,13 +4,13 @@ import time
 import datetime
 import pickle
 import os
-
+import code
 from chainer import cuda, Variable, no_backprop_mode
 import cupy as cp
 import numpy as np
 
 from data.data_processing import mnist_preprocessing, cifar10_preprocessing, cifar100_preprocessing
-from data.data_augmentation import randomcrop, randomhorizontalflip
+from data.data_augmentation import randomhorizontalflip
 import models.architectures.mlp as mlp
 
 class NNAgent(object):
@@ -130,8 +130,7 @@ class NNAgent(object):
         ##### Epoch loop
         with no_backprop_mode():
         #     # first call of model to initialize values without generating computational graph
-        #     self.model(self.train_in, train = False)
-            self.model(self.train_in[0:2])
+            self.model(self.train_in[0:2], train = True)
         self.model.ortho_iter_red()
         
         print("Total epochs for training = ", self.n_epoch)
@@ -160,7 +159,7 @@ class NNAgent(object):
                     ### regular smooth loss
                     _, mean_s, var_s, mean_h, var_h = self.model.moment_propagation(len(self.model), in_data, self.x_var, w_grad=True)
                 else:
-                    mean_s = self.model(in_data)
+                    mean_s = self.model(in_data, train = True)
                     var_s = None
                 loss_out = self.loss_func(mean_s, var_s, t, self.d, None, None, x_var = self.x_var)
                 ##### Get the gradient of the loss function with respect to each parameter in the network

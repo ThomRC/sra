@@ -1,3 +1,11 @@
+"""
+Code from Cem Anil adapted to be used with Chainer, and added the iter_red function that dynamically changes the Bjorck iterations:
+https://github.com/cemanil/LNets/blob/master/lnets/models/layers/dense/bjorck_linear.py
+
+Cem Anil, James Lucas, Roger Grosse. "Sorting Out Lipschitz Function Approximation"
+Proceedings of the 36th International Conference on Machine Learning (2019)
+"""
+
 import typing as tp  # NOQA
 
 import chainer.functions as F
@@ -26,9 +34,6 @@ class BjorckLinear(DenseLinear, Adam):
         Returns: the multiplication of the orthogonalized matrix and the previous layer activation
 
         """
-        # if not hasattr(self, 'iter'):
-        #     self.iter = self.config['iter']
-
         if self.W.array is None:
             in_size = utils.size_of_shape(x.shape[n_batch_axes:])
             self._initialize_params(in_size)
@@ -52,6 +57,7 @@ class BjorckLinear(DenseLinear, Adam):
         return
 
     def iter_red(self):
+        # Call the function min_ortho_iter for the current layer, which obtains the minimal number of iterations required to have an approximately orthogonal layer
         self.iter = min_ortho_iter(self.W,
                                         beta=self.config['beta'],
                                         iters=self.iter,
