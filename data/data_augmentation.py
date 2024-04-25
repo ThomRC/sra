@@ -2,7 +2,8 @@ import numpy as np
 import chainer.functions as F
 
 def randomhorizontalflip(img, p=0.5):
-    """Horizontally flip the given image randomly with a given probability.
+    """
+    Horizontally flip the given image randomly with a given probability.
     If the image is torch Tensor, it is expected
     to have [..., H, W] shape, where ... means an arbitrary number of leading
     dimensions

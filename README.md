@@ -21,7 +21,7 @@ Run the following to initialize conda
 
 Run the following to create an environment named "sra-env" with all the required packages
 
-    conda create -n sra-env -c conda-forge python=3.8 chainer=7.8.0 cupy=7.8.0 scikit-learn=0.23 scipy=1.7
+    conda create -n sra-env -c conda-forge python=3.8 chainer=7.8.0 cupy=7.8.0 scikit-learn=0.23 scipy=1.7 statsmodels=0.14 einops=0.7
 
 Run the following to activate the environment in order to run the provided code
 
@@ -76,10 +76,15 @@ When using 'load' or 'load_all', before the measurements start you will be promp
     
     Number of the GPU to be used for the training. When in load mode the used gpu is the same from the training even if the gpu argument is another one
 
-
 # Code References
-denselinear.py, bjorck_linear.py, selections.py, bjorck_ortho.py based on github/cemanil, respectively - 
+denselinear.py, bjorck_linear.py, selections.py, based on github/cemanil/LNets/, respectively - 
 https://github.com/cemanil/LNets/blob/master/lnets/models/layers/dense/base_dense_linear.py
 https://github.com/cemanil/LNets/blob/master/lnets/models/layers/dense/bjorck_linear.py
 https://github.com/cemanil/LNets/blob/master/lnets/models/utils/selections.py
-https://github.com/cemanil/LNets/blob/master/lnets/utils/math/projections/l2_ball.py
+
+ortho_conv2d.py, invertible_downsampling.py, based on github/ColinQiyangLi/LConvNet/, respectively - 
+https://github.com/ColinQiyangLi/LConvNet/blob/master/lconvnet/layers/bcop.py
+https://github.com/ColinQiyangLi/LConvNet/blob/master/lconvnet/layers/invertible_downsampling.py
+
+conv_utils.py, bjorck_ortho.py, based on github/ColinQiyangLi/LConvNet/ - 
+https://github.com/ColinQiyangLi/LConvNet/blob/master/lconvnet/layers/utils.py

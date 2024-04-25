@@ -15,16 +15,16 @@ from measurements.other import ssnr_eval_acc
 from measurements.utils import save_measurements
 
 def adversarial_eval(network, x, target, name_str):
-    """ Empirical external perturbation evaluations (L2 and Linf PGD attacks, Gaussian noise perturbation) and SSNR linear corruption)
+    """
+    Empirical adversarial robustness evaluations (L2 and Linf PGD attacks)
 
     Args:
-        network: NNAgent object containing the model subject to the pertubation
+        network: NNAgent object containing the model subject to the perturbation
         x: input that will be perturbed
         target: correct class array
         name_str: string containing the name code for current net to check if the measurements were already taken
 
     Returns: the measured accuracies for the four different types of perturbation
-
     """
     start_time = time.perf_counter()
     print("### 1.1) Adversarial robustness tests (L2 and Linf PGD attacks) ###")
@@ -63,16 +63,16 @@ def adversarial_eval(network, x, target, name_str):
     return adv_acc_linf, noise_adv_acc_linf, adv_acc_l2, noise_adv_acc_l2
 
 def other_eval(network, x, target, name_str):
-    """ Empirical external perturbation evaluations (L2 and Linf PGD attacks, Gaussian noise perturbation) and SSNR linear corruption)
+    """
+    Empirical external perturbation evaluations (Gaussian noise perturbation and SSNR linear corruption)
 
     Args:
-        network: NNAgent object containing the model subject to the pertubation
+        network: NNAgent object containing the model subject to the perturbation
         x: input that will be perturbed
         target: correct class array
         name_str: string containing the name code for current net to check if the measurements were already taken
 
     Returns: the measured accuracies for the four different types of perturbation
-
     """
     start_time = time.perf_counter()
     print("### 1.2) Gaussian noise perturbation and SSNR linear corruption robustness tests ###")
@@ -102,15 +102,15 @@ def other_eval(network, x, target, name_str):
     return noise_acc, ssnr_acc
 
 def numerical_eval(network, x, target):
-    """ Obtain through numerical integration the variables required to certify the robustness for different input sd
+    """
+    Obtain through numerical integration the values required to certify the robustness for different input sd
 
     Args:
-        network: NNAgent object containing the model subject to the pertubation
+        network: NNAgent object containing the model subject to the perturbation
         x: input that will be perturbed
         target: correct class array
 
     Returns: correct classification probability, runner up probability, smoothed margin, output layer mean, output layer variance
-
     """
     t1 = time.perf_counter()
     print("### 2) Numerical integration of output metrics (classification probability and smoothed margin) ###")
@@ -123,9 +123,7 @@ def numerical_eval(network, x, target):
     mean_out_arr.append(cuda.to_cpu(mean_s.array))
     var_out_arr.append(cuda.to_cpu(cp.zeros_like(mean_s.array)))
     function_params = []
-    # for sd in np.linspace(0.11, 1.65, 15):
     for sd in np.linspace(0.03, 1.01, 15):
-        # for i, sd in enumerate(np.arange(0.41, 2.87, 0.41)):
         with no_backprop_mode():
             _, mean_s, var_s, _, _ = network.model.moment_propagation(len(network.model), x, sd ** 2)
 
@@ -150,15 +148,15 @@ def numerical_eval(network, x, target):
     return c_prob, ru_prob, smooth_margin, np.asarray(mean_out_arr), np.asarray(var_out_arr)
 
 def emp_evals(network, x, target):
-    """ Calculates sample estimate of output metrics (classification probability and smoothed margin)
+    """
+    Calculates sample estimates of output metrics (classification probability and smoothed margin)
 
     Args:
-        network: NNAgent object containing the model subject to the pertubation
+        network: NNAgent object containing the model subject to the perturbation
         x: input that will be perturbed
         target: correct class array
 
     Returns: correct classification probability, runner up probability, smoothed margin, output layer mean, output layer variance
-
     """
     start_time = time.perf_counter()
     prob_c_arr = []
@@ -187,16 +185,16 @@ def emp_evals(network, x, target):
     return cuda.to_cpu(cp.asarray(prob_c_arr)), cuda.to_cpu(cp.asarray(margin_mean_arr)), cuda.to_cpu(cp.asarray(margin_var_arr))
 
 def cr_eval(network, x, target, name_str):
-    """ Evaluation of certified radius
+    """
+    Evaluation of certified radius
 
     Args:
-        network: NNAgent object containing the model subject to the pertubation
+        network: NNAgent object containing the model subject to the perturbation
         x: input that will be perturbed
         target: correct class array
         name_str: string containing the name code for current net to check if the measurements were already taken
 
     Returns: the measured accuracies for the four different types of perturbation
-
     """
     start_time = time.perf_counter()
     print("### 4) Randomized smoothing (Cohen et al., 2019) and Lipschitz margin certified radii ###")
@@ -223,14 +221,14 @@ def cr_eval(network, x, target, name_str):
     return rs_cr, margin_cr
 
 def measurements(network, x, target, dest, robustness = True, num_int = True, sample_est = True, rs_cr = True):
-    """ Calls functions to carry all robustness measurements for the currently loaded NN and stores it into a dictionary that will be used to save the data into .npy files
+    """
+    Calls functions to carry all robustness measurements for the currently loaded NN and stores it into a dictionary that will be used to save the data into .npy files
 
     Args:
         network: NNAgent object containing the model subject to the pertubation
         x: input that will be perturbed
         target: correct class array
         dest: destination folder to
-
     """
     print("##### Robustness measurements for Loss: {}; d: {}; x_var: {}; training num.: {}".format(network.loss, network.d, network.x_var, network.model.training_num))
     # Creates name string containing the loss from currently loaded NN, the total trianing epochs, x_var and d hyperparameters, and the training number in case of having more than one trained NN with same settings

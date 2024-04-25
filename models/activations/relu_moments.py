@@ -85,12 +85,14 @@ class ReluVar(function_node.FunctionNode):
 
 
 def relu_mean(pre_m, pre_v):
-    """ Mean of Rectified Normal distribution (a.k.a., mean of Rectified Linear with Gaussian pre-activation) function
+    """
+    Mean of Rectified Normal distribution (a.k.a., mean of Rectified Linear with Gaussian pre-activation) function
     The function computes the mean of the rectified Normal distribution with mean
     ``pre_m`` and variance ``pre_v``.
     Args ``pre_m`` and ``pre_v`` must have the same dimensions (diagonal var.
     matrix) OR ``pre_v`` has one more dimension than ``pre_m`` (var. matrix with
     non-diagonal elements).
+    
     Args:
         pre_m (:class:`~chainer.Variable` or :ref:`ndarray`): Input variable.
         pre_v (:class:`~chainer.Variable` or :ref:`ndarray`): Input variable.
@@ -102,12 +104,14 @@ def relu_mean(pre_m, pre_v):
 
 
 def relu_var(pre_m, pre_v, h_m):
-    """ Variance of Rectified Normal distribution (a.k.a., variance of Rectified Linear with Gaussian pre-activation) function
+    """
+    Variance of Rectified Normal distribution (a.k.a., variance of Rectified Linear with Gaussian pre-activation) function
     The function computes the variance of the rectified Normal distribution with mean
     ``pre_m`` and variance ``pre_v``.
     Args ``pre_m`` and ``pre_v`` must have the same dimensions (diagonal var.
     matrix) OR ``pre_v`` has one more dimension than ``pre_m`` (var. matrix with
     non-diagonal elements).
+    
     Args:
         pre_m (:class:`~chainer.Variable` or :ref:`ndarray`): Input variable.
         pre_v (:class:`~chainer.Variable` or :ref:`ndarray`): Input variable.
@@ -118,12 +122,14 @@ def relu_var(pre_m, pre_v, h_m):
     return ReluVar().apply((pre_m, pre_v, h_m))[0]
 
 def relu_moments(pre_m, pre_v):
-    """ ReLU moments function
+    """
+    ReLU moments function
     The function calls the functions that compute the mean and variance of the rectified Normal distribution with mean
     ``pre_m`` and variance ``pre_v``.
     Args ``pre_m`` and ``pre_v`` must have the same dimensions (diagonal var.
     matrix) OR ``pre_v`` has one more dimension than ``pre_m`` (var. matrix with
     non-diagonal elements).
+    
     Args:
         pre_m (:class:`~chainer.Variable` or :ref:`ndarray`): Input variable.
         pre_v (:class:`~chainer.Variable` or :ref:`ndarray`): Input variable.

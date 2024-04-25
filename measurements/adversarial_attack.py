@@ -2,7 +2,8 @@ import time
 import cupy as cp
 
 def linf_pgd(network, x, target):
-    """ Carries linf-norm PGD adversarial attacks with with gradual increments of adversarial radius until all samples are successfully attacked to measure robustness against linf attacks
+    """
+    Carries linf-norm PGD adversarial attacks with gradual increments of adversarial radius until all samples are successfully attacked to measure robustness against linf attacks
 
     Args:
         network: NNAgent object containing the model subject to attacks
@@ -10,7 +11,6 @@ def linf_pgd(network, x, target):
         target: correct class array
 
     Returns: adversarial accuracy and adversarial accuracy under noise for each attack radius
-
     """
     if network.dataset == "MNIST":
         radius_step = 0.025
@@ -58,7 +58,8 @@ def linf_pgd(network, x, target):
     return adv_acc, noise_adv_acc
 
 def l2_pgd(network, x, target):
-    """ Carries l2-norm PGD adversarial attacks with with gradual increments of adversarial radius until all samples are successfully attacked to measure robustness against l2 attacks
+    """
+    Carries l2-norm PGD adversarial attacks with gradual increments of adversarial radius until all samples are successfully attacked to measure robustness against l2 attacks
 
     Args:
         network: NNAgent object containing the model subject to attacks
@@ -66,7 +67,6 @@ def l2_pgd(network, x, target):
         target: correct class array
 
     Returns: adversarial accuracy and adversarial accuracy under noise for each attack radius
-
     """
     if network.dataset == "MNIST":
         radius_step = 0.32

@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
-import sys
 import os
-
 from chainer import initializers
-import cupy as cp
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"  # In case the GPU order in the bus is different from the one listed by CUDA
 
@@ -15,7 +12,6 @@ def settings(input_params):
         gpu: number of GPU to be used
 
     Returns: kwargs dictionary containing all experimental settings
-
     """
     ############################################################################
     #
@@ -49,14 +45,13 @@ def settings(input_params):
     ############################################################################
 
     ############################################################################
-    # ARCHITECTURE SETTINGS
+    # STARTS ARCHITECTURE SETTINGS
     arch = 'cnn' # 'mlp' or 'cnn'
     # arch = 'mlp' # 'mlp' or 'cnn'
 
     units = 512  # # OV: 512 units per layer
     in_padding = False # concatenates channels to match the dimension of lower to higher dimensional transformations
-
-
+    
     # IN CASE OF EACH LAYER HAVING DIFFERENT # OF UNITS PLEASE CHANGE IT LIKE
     # fc_hl_units = [units1, units2, units3, ...]
     # E.g.: fc_hl_units = [500, 400, 300, 200, 100]    
@@ -97,7 +92,7 @@ def settings(input_params):
     arch_str = arch_str[0:-1]
     print("Architecture used: " + arch_str)
     
-    # /ARCHITECTURE SETTINGS
+    # ENDS ARCHITECTURE SETTINGS
     #########################ß###################################################
     curr_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
 

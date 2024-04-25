@@ -1,10 +1,8 @@
 import six
 import csv
 import time
-import datetime
 import pickle
 import os
-import code
 from chainer import cuda, Variable, no_backprop_mode
 import cupy as cp
 import numpy as np
@@ -14,6 +12,11 @@ from data.data_augmentation import randomhorizontalflip
 import models.architectures.mlp as mlp
 
 class NNAgent(object):
+    """
+    A neural network agent for training and evaluating models.
+
+    This class manages the training process, data preparation, model creation, and saving of training data and models.
+    """
     def __init__(self, test_data = 10000, **kwargs):
         super().__init__()
         # Experiment and training settings
@@ -46,16 +49,17 @@ class NNAgent(object):
         self.loss_value = []
 
     def import_loss(self):
-        """ Import the loss function
+        """
+        Import the loss function
 
         Returns: loss function to be used
-
         """
         from models.utils.selections import select_loss_function
         return select_loss_function(self.loss)
 
     def prepare_data(self, mode = 'train', **kwargs):
-        """ Method to prepare the training and test data
+        """
+        Method to prepare the training and test data
 
         Args:
             mode: train samples randomly the data for training and test, load uses the indices saved to have the same
@@ -105,18 +109,16 @@ class NNAgent(object):
                 return
 
     def create_model(self, **kwargs):
-        """ Method responsible to create the net and set the parameters """
-        # Network layer sizes
+        """ Method responsible to create the NN and set the initial parameters """
         args = kwargs.pop('fc_hl_units')
         self.model = mlp.FeedForwardNN(self.n_out, *args, **kwargs).to_gpu()
         self.model.n_in = self.tr_x.shape[1]
 
-
     def training(self):
-        """ Function to run the training part of the training routine
+        """ 
+        Method to run the training part of the training routine
 
         Returns: the epoch that training stopped to then check if training was successful
-
         """
         print('### Starting training')
         # Allocates as chainer variables the validation and training data
@@ -127,13 +129,13 @@ class NNAgent(object):
 
         steps = 1
 
-        ##### Epoch loop
         with no_backprop_mode():
-        #     # first call of model to initialize values without generating computational graph
+            # First call of model to initialize values without generating computational graph
             self.model(self.train_in[0:2], train = True)
         self.model.ortho_iter_red()
         
         print("Total epochs for training = ", self.n_epoch)
+        ##### Epoch loop
         for epoch in range(self.n_epoch):
             now = time.time()
             perm_tr = np.random.permutation(self.n_train) # creates a random permutation of n_train integers, where n_train is the number of training examples
@@ -150,15 +152,14 @@ class NNAgent(object):
                     in_data = self.train_in[data_indices]
                 
                 t = self.train_out[data_indices]
-                ##### Gradient update averaging loop
-                ##### calculate the grads
-                self.model.cleargrads()
-                ##### Forward the input data from the minibatch in the network
-
+                
+                self.model.cleargrads() ##### clear the grads
+                ##### Forward the input data from the minibatch
                 if self.smooth_loss:
-                    ### regular smooth loss
+                    ### Calls moment propagation in case of smoothed losses
                     _, mean_s, var_s, mean_h, var_h = self.model.moment_propagation(len(self.model), in_data, self.x_var, w_grad=True)
                 else:
+                    ### Regular forward pass in case of non-smoothed losses
                     mean_s = self.model(in_data, train = True)
                     var_s = None
                 loss_out = self.loss_func(mean_s, var_s, t, self.d, None, None, x_var = self.x_var)
@@ -168,17 +169,16 @@ class NNAgent(object):
                 self.model.update_net(epoch)
                 steps += 1
 
-            ##### Train accuracy of the updated network after 1 epoch
-            # with no_backprop_mode():
-            tr_sample_idx = np.random.choice(50000, 5000, replace=False) # cp -> np
+            ##### Computes and displays train accuracy of the updated network after 1 epoch
+            tr_sample_idx = np.random.choice(50000, 5000, replace=False)
             accuracy = self.model.validation(self.train_in[tr_sample_idx], self.train_out[tr_sample_idx], train=False)
             self.acc_train.append(accuracy)
             print("Accuracy train data: {}".format(accuracy))
-            ##### Test accuracy of the updated network after 1 epoch
+            ##### Computes and displays test accuracy of the updated network after 1 epoch
             accuracy = self.model.validation(self.valid_in, self.valid_out, train=False)
             self.acc_test.append(accuracy)
             print("Accuracy test data: {}".format(accuracy))
-            ##### Test accuracy of the updated network after 1 epoch with noisy input
+            ##### Computes and displays test accuracy of the updated network after 1 epoch with noisy input
             accuracy = self.model.validation(self.valid_in, self.valid_out, noise_in=True, sd = self.intvl_in, train=False)
             self.acc_test_noise.append(accuracy)
             print("Accuracy test data under noise: {}".format(accuracy))
@@ -200,13 +200,12 @@ class NNAgent(object):
 
         return epoch
 
-    # Method to save the graphs and data into specified folder
     def save_data(self, save = True):
-        """ Save the data collected during training for training and test error, test error under noise and loss
+        """ 
+        Saves the data collected during training for training and test error, test error under noise and loss
 
         Args:
             save: boolean that informs if data should be saved
-
         """
         if save:
             print("#### Saving data in the specified directory")
@@ -228,12 +227,12 @@ class NNAgent(object):
             print("#### Data not saved")
 
     def save_net(self, epoch, save = True):
-        """ Saves the NNAgent object ''network'' from the current training to the ''save_dir'' directory under the
+        """
+        Saves the NNAgent object ''network'' from the current training to the ''save_dir'' directory under the
         ''net_name'' name
 
         Args:
             save: boolean that informs if trained net should be saved
-
         """
         if save:
             print("#### Saving trained net in the specified directory")
@@ -254,13 +253,13 @@ class NNAgent(object):
             print("#### Trained net not saved")
 
 def run_training(**kwargs):
-    """ Runs training routine
+    """
+    Function to prepare and run the training routine
 
     Args:
         **kwargs: dictionary containing all training settings
 
     Returns: 1 if training is successful, 0 otherwise
-
     """
     cp.cuda.Device(kwargs['gpu']).use()
     cuda.set_max_workspace_size(33554432)

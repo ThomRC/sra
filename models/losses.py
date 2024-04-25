@@ -6,8 +6,8 @@ from chainer.utils import type_check
 import numpy as np
 
 def sce(logits, foo, target, *args, **kwargs):
-    """ Average softmax cross-entropy loss over logits () over minibatch.
-    This function
+    """
+    Average softmax cross-entropy loss over logits () over minibatch.
 
     Args:
         logits: array of output vectors before applying softmax function
@@ -18,12 +18,12 @@ def sce(logits, foo, target, *args, **kwargs):
         **kwargs: required to receive any other argument, even though not using them
 
     Returns: mean softmax cross-entropy loss over minibatch
-
     """
     return F.mean(F.softmax_cross_entropy(logits, target))
 
 def sc_sce(mean_s, var_s, target, *args, **kwargs):
-    """ Smoothed classifier SCE loss
+    """
+    Smoothed classifier SCE loss
 
     Args:
         mean_s: array of output mean vector under isotropic Gaussian noise
@@ -33,12 +33,12 @@ def sc_sce(mean_s, var_s, target, *args, **kwargs):
         **kwargs: required to receive any other argument, even though not using them
 
     Returns: SCE loss for the mean output
-
     """
     return sce(mean_s, var_s, target)
 
 def mc_hinge(logits, foo, target, d, *args, **kwargs):
-    """ Multiclass hinge loss
+    """
+    Multiclass hinge loss
 
     Args:
         logits: array of output vectors before applying softmax function
@@ -50,7 +50,6 @@ def mc_hinge(logits, foo, target, d, *args, **kwargs):
         **kwargs: required to receive any other argument, even though not using them
 
     Returns: mean multiclass hinge loss over minibatch
-
     """
     idx_aux = cp.arange(len(target))
     aux2 = cp.zeros_like(logits.array, dtype = 'bool')
@@ -62,7 +61,8 @@ def mc_hinge(logits, foo, target, d, *args, **kwargs):
     return F.mean(F.sum(F.relu(d - (c_out - notc_out)), axis = 1))
 
 def zhen_loss(mean_s, var_s, target, d, *args, **kwargs):
-    """ Zhen (randomized smoothing certified radius) loss
+    """
+    Zhen (randomized smoothing certified radius) loss
 
     Args:
         mean_s: array of output mean vector under isotropic Gaussian noise
@@ -73,7 +73,6 @@ def zhen_loss(mean_s, var_s, target, d, *args, **kwargs):
         **kwargs: required to receive any other argument, even though not using them
 
     Returns: mean Zhen loss over minibatch
-
     """
     x_var = kwargs['x_var']
     eps = 10**-8
@@ -86,7 +85,8 @@ def zhen_loss(mean_s, var_s, target, d, *args, **kwargs):
     return F.mean(F.relu(d - cp.sqrt(x_var)*(mean_s[idx_aux,target.array] - mean_s[idx_aux,not_tgt_max_idx])/(F.sqrt(var_s[idx_aux,target.array] + var_s[idx_aux,not_tgt_max_idx]) + eps)))
 
 def mcr_loss(logits, foo, target, d, *args, **kwargs):
-    """ Margin certified radius loss
+    """
+    Margin certified radius loss
 
     Args:
         logits: array of output vectors before applying softmax function
@@ -98,7 +98,6 @@ def mcr_loss(logits, foo, target, d, *args, **kwargs):
         **kwargs: required to receive any other argument, even though not using them
 
     Returns: mean margin certified radius loss over minibatch
-
     """
     idx_aux = cp.arange(len(target))
     aux2 = cp.zeros_like(logits.array, dtype = 'bool')
@@ -108,43 +107,12 @@ def mcr_loss(logits, foo, target, d, *args, **kwargs):
     not_tgt_max_idx = notc_out.array.argmax(axis=1)
     return F.mean(F.relu(d - (logits[idx_aux, target.array] - notc_out[idx_aux, not_tgt_max_idx])))
 
-# def sm(mean_s, var_s, target):
-#     """ Smoothed margin function
-
-#     Args:
-#         mean_s: array of output mean vector under isotropic Gaussian noise
-#         var_s: array of output variance vector under isotropic Gaussian noise
-#         target: array containing the target class output for each input in the minibatch
-
-#     Returns: closed form estimate of smoothed margin
-
-#     """
-#     eps = 10**-14
-#     idx_aux = cp.arange(len(target))
-#     c_mean = mean_s[idx_aux, target.array]
-    
-#     aux3 = cp.zeros_like(mean_s.array, dtype = 'bool')
-#     aux3[idx_aux,target.array] = True
-#     aux3 = cp.logical_not(aux3)
-#     mean_not_c = mean_s[aux3].reshape((len(target),-1)) # output means excepet correct output's
-#     mean_sort_idx = mean_not_c.array.argsort(axis = 1)
-#     row_idx = cp.repeat(cp.arange(len(target)), mean_sort_idx.shape[1]).reshape((len(target), -1))
-#     var_not_c = var_s[aux3].reshape((len(target), -1))
-    
-#     mean_sort = mean_not_c[row_idx, mean_sort_idx]
-#     var_sort = var_not_c[row_idx, mean_sort_idx]
-#     max_mean = mean_sort[:, -1]
-#     max_var = var_sort[:, -1]
-#     ru_mean = mean_sort[:, -2]
-#     ru_var = var_sort[:, -2]
-#     t1 = F.sqrt((max_var+ru_var)/(2*cp.pi)) * F.exp(-(max_mean-ru_mean)**2/(2*(max_var+ru_var) + eps))
-#     t2 = ru_mean + (max_mean - ru_mean) * (1 + F.erf((max_mean-ru_mean)/(F.sqrt(2*(max_var+ru_var) + eps)))) * 0.5
-#     return -(c_mean - (t1 + t2))
-
-
 class SmoothMargin(function_node.FunctionNode):
-
-    """Rectified Linear Unit variance (i.e., Rectified normal distribution mean) class"""
+    """
+    Closed-form smoothed margin class 
+    
+    The forward pass uses the mean of the correct class and means and variances of 1st and 2nd largest incorrect classes
+    """
 
     def check_type_forward(self, in_types):
         type_check._argname(in_types, ('out_c_m', 'out_max_m', 'out_max_v', 'out_ru_m', 'out_ru_v'))
@@ -161,9 +129,7 @@ class SmoothMargin(function_node.FunctionNode):
         eps = 10**-8 # numerical stability constant
         self.retain_inputs((0, 1, 2, 3, 4))
         c_mean, max_mean, max_var, ru_mean, ru_var = inputs
-        # alpha = (max_mean - ru_mean)/(cp.sqrt(2 * (max_var + ru_var) + eps))
         alpha_sq = (max_mean - ru_mean)**2/(2 * (max_var + ru_var) + eps)
-        # aux = cp.sqrt((max_var+ru_var)/(2*cp.pi)) * cp.exp(-alpha**2) + ru_mean + (max_mean - ru_mean) * (1 + erf(alpha)) * 0.5
         aux = cp.sqrt((max_var+ru_var)/(2*cp.pi)) * cp.exp(-alpha_sq) + ru_mean + (max_mean - ru_mean) * (1 + erf(cp.sqrt(alpha_sq))) * 0.5
         sm = aux - c_mean
         return sm,
@@ -176,13 +142,10 @@ class SmoothMargin(function_node.FunctionNode):
         max_var = max_var.array
         ru_mean = ru_mean.array
         ru_var = ru_var.array
-        # alpha = (max_mean - ru_mean)/(cp.sqrt(2 * (max_var + ru_var) + eps))
         alpha_sq = (max_mean - ru_mean)**2/(2 * (max_var + ru_var) + eps)
 
         gmean_c = -gy
-        # gmean_max = gy * (1 + erf(alpha)) * 0.5
         gmean_max = gy * (1 + erf(cp.sqrt(alpha_sq))) * 0.5
-        # gvar_max = gy * 0.5 * cp.exp(-alpha**2) / cp.sqrt(2 * cp.pi * (max_var + ru_var) + eps)
         gvar_max = gy * 0.5 * cp.exp(-alpha_sq) / cp.sqrt(2 * cp.pi * (max_var + ru_var) + eps)
         gmean_ru = gy - gmean_max
         gvar_ru = gvar_max
@@ -242,18 +205,21 @@ class SmoothMargin(function_node.FunctionNode):
 #         return gmean_c, gmean_max, gvar_max, gmean_ru, gvar_ru
 
 def sm(out_m, out_v, target):
-    """ Mean of Rectified Normal distribution (a.k.a., mean of Rectified Linear with Gaussian pre-activation) function
-    The function computes the mean of the rectified Normal distribution with mean
-    ``pre_m`` and variance ``pre_v``.
-    Args ``pre_m`` and ``pre_v`` must have the same dimensions (diagonal var.
-    matrix) OR ``pre_v`` has one more dimension than ``pre_m`` (var. matrix with
+    """
+    Closed form approximation of expected margin ('smoothed margin')
+    
+    This function calls the class SmoothMargin so that the backward pass can be computed
+    
+    Args ``out_m`` and ``out_v`` must have the same dimensions (diagonal var.
+    matrix) OR ``out_v`` has one more dimension than ``out_m`` (var. matrix with
     non-diagonal elements).
     Args:
-        pre_m (:class:`~chainer.Variable` or :ref:`ndarray`): Input variable.
-        pre_v (:class:`~chainer.Variable` or :ref:`ndarray`): Input variable.
+        out_m (:class:`~chainer.Variable` or :ref:`ndarray`): Input variable.
+        out_v (:class:`~chainer.Variable` or :ref:`ndarray`): Input variable.
+        target (:class:`~chainer.Variable` or :ref:`ndarray`): Input variable.
     Returns:
         ~chainer.Variable:
-            A variable holding an array representing the mean of a layer with ReLU units and independent normally distributed pre-activations
+            A variable holding the approximate smoothed margin for each input
     """
     idx_aux = cp.arange(len(target))
     c_mean = out_m[idx_aux, target.array]
@@ -275,7 +241,11 @@ def sm(out_m, out_v, target):
     return SmoothMargin().apply((c_mean, max_mean, max_var, ru_mean, ru_var))[0]
 
 def mscr_loss(mean_s, var_s, target, d, *args, **kwargs):
-    """ Margin smoothed certified radius loss
+    """
+    Margin smoothed certified radius loss
+    
+    Computes the hinge loss of the smoothed margin
+    For 1-Lipschitz NN the MSCR is proportional to the smoothed margin, so we omit the proportionality constant for simplicity
 
     Args:
         mean_s: array of output mean vector under isotropic Gaussian noise
@@ -286,12 +256,12 @@ def mscr_loss(mean_s, var_s, target, d, *args, **kwargs):
         **kwargs: required to receive any other argument, even though not using them
 
     Returns: mean margin smoothed certified radius loss over minibatch
-
     """
     return F.mean(F.relu(d + sm(mean_s, var_s, target)))
 
 def cw_loss(logits, target, cut = 0):
-    """ Carlini and Wagner loss (used for PGD adversarial attack)
+    """
+    Carlini and Wagner loss (used for PGD adversarial attack)
 
     Args:
         logits: array of output vectors before applying softmax function
@@ -299,7 +269,6 @@ def cw_loss(logits, target, cut = 0):
         cut: hyperparameter that controls the "strength" of the attack by guaranteeing a minimal difference between the logits. cut = 0 accepts as successful attack when correct and incorrect logits are the same
 
     Returns: mean Carlini and Wagner loss over minibatch
-
     """
     idx_aux = cp.arange(len(target))
 

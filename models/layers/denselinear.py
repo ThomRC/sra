@@ -7,6 +7,11 @@ from chainer import link, variable, initializers, types, utils
 from models.activations.relu_moments import relu_moments
 
 class DenseLinear(link.Link):
+    """
+    A dense linear layer implementation for neural networks.
+
+    This class represents a dense linear layer with customizable weight initialization and bias options, providing the foundation for linear transformations in neural network architectures.
+    """
     def __init__(self,
                  in_size: tp.Optional[int],
                  out_size: tp.Optional[int] = None,
@@ -44,17 +49,25 @@ class DenseLinear(link.Link):
         raise NotImplementedError
 
     def relu_moment_propagation(self, x_m, x_v, w_grad = False, layer_num = None, x_var = None):
-        """ Computes the pre-activation's mean and variance vectors and calls the relu_moments function
+        """
+        Performs moment propagation for ReLU activation in a neural network layer.
+
+        This function computes the mean and variance vectors of the pre-activation, applies ReLU moments computation, and returns the resulting mean and variance vectors for the layer.
 
         Args:
             x_m: previous layer's mean vector
             x_v: previous layer's variance vector (we assume independent activations, i.e., zero covariances
             w_grad: boolean telling whether the gradients are needed or not
+            layer_num: integer to specify up until which layer the moment propagation will be carried. If None it is done over entire NN
+            x_var:
 
         Returns:
+            mean_s: mean vector of preactivations
+            var_s: variance vector of preactivations
+            h_m: mean vector of layer
+            h_v: variance vector of layer
 
         """
-
         if w_grad:
             self.orthonormalize() # carries orthonormalization only in the case of needing the W gradients
             W = self.ortho_w

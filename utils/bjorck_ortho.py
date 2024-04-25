@@ -5,16 +5,15 @@ https://github.com/ColinQiyangLi/LConvNet/blob/master/lconvnet/layers/utils.py
 Qiyang Li, Saminul Haque, Cem Anil, James Lucas, Roger Grosse, Jörn-Henrik Jacobsen. "Preventing Gradient Attenuation in Lipschitz Constrained Convolutional Networks"
 33rd Conference on Neural Information Processing Systems (NeurIPS 2019)
 """
-
-import typing as tp  # NOQA
-
 import cupy as cp
 import chainer
 from chainer import Variable, no_backprop_mode
 import chainer.functions as F
 
 def bjorck_orthonormalize(w, beta=0.5, iters=20, order=1):
-    """
+    """ Function to orthonormalize a matrix or matrices
+    
+    Algorithm from:
     Bjorck, Ake, and Clazett Bowie. "An iterative algorithm for computing the best estimate of an orthogonal matrix."
     SIAM Journal on Numerical Analysis 8.2 (1971): 358-364.
     """
@@ -30,7 +29,8 @@ def bjorck_orthonormalize(w, beta=0.5, iters=20, order=1):
     return w
 
 def min_ortho_iter(w, beta=0.5, iters=30, order=1, first = False):
-    """ Function that reduces the number of iterations required to still achieve a mean pairwise dot product between the weight matrix rows lower than 10**-8
+    """ Function that reduces the number of iterations required to still achieve a mean pairwise dot product 
+    between the weight matrix rows <= 10**-7 and the mean row norm is >= 0.999998
 
     Args:
         w: weight matrix before the ortogonalization
@@ -39,7 +39,6 @@ def min_ortho_iter(w, beta=0.5, iters=30, order=1, first = False):
         order: BO hyperparameter, original value used in all experiments is 1
 
     Returns: the new number of iterations for the current layer
-
     """
     ths1 = 10**-7
     ths2 = 0.999998

@@ -1,7 +1,8 @@
 import cupy as cp
 
 def gaussian_noise_acc(network, x, target):
-    """ Measures the accuracy under Gaussian noise with with gradual increments of noise variance until average accuracy reaches 1/c, where c is the number of output classes
+    """
+    Measures the accuracy under Gaussian noise with gradual increments of noise variance until average accuracy reaches 1/c, where c is the number of output classes
 
     Args:
         network: NNAgent object containing the model subject to the pertubation
@@ -9,7 +10,6 @@ def gaussian_noise_acc(network, x, target):
         target: correct class array
 
     Returns: accuracy under noise for each input variance
-
     """
     if network.dataset == "MNIST":
         acc_threshold = 0.13

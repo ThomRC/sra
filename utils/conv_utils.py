@@ -34,7 +34,7 @@ def cyclic_pad_2d(x, pads, even_h=False, even_w=False):
 
 def conv2d_cyclic_pad(x, weight, bias=None):
     """
-    Implemenation of cyclic padding followed by a normal convolution
+    Implemenation of cyclic padding followed by a regular 2d convolution
     """
     kh, kw = weight.shape[-2], weight.shape[-1]
     x = cyclic_pad_2d(x, [kh // 2, kw // 2], (kh % 2 == 0), (kw % 2 == 0))

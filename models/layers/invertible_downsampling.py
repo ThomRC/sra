@@ -8,11 +8,15 @@ https://github.com/ColinQiyangLi/LConvNet/blob/master/lconvnet/layers/invertible
 Qiyang Li, Saminul Haque, Cem Anil, James Lucas, Roger Grosse, Jörn-Henrik Jacobsen. "Preventing Gradient Attenuation in Lipschitz Constrained Convolutional Networks"
 33rd Conference on Neural Information Processing Systems (NeurIPS 2019)
 """
-
 from chainer import link
 from einops import rearrange
 
 class InvertibleDownsampling2d(link.Link):
+    """
+    Implements 2D invertible downsampling using rearrangement of input data.
+
+    This class performs downsampling on 2D input data by rearranging the data based on the specified kernel size.
+    """    
     def __init__(self, kernel_size):
         super().__init__()
         if type(kernel_size) == int:

@@ -26,7 +26,7 @@ class Adam:
         self.step_counter_bu = 0
         self.spe = 0 ### step per epoch
         self.W_bu = self.W.array
-        self.upd_start = 0
+        self.upd_start = 2000
 
     def update(self, epoch, grad_norm):
         if self.m is None:
@@ -53,7 +53,6 @@ class Adam:
 
             if self.schedule == 'cos-ann':
                 # Learning rate decay for cosine annealing
-                # self.lr_sch = 0.5 * (1 + self.xp.cos(self.xp.pi * self.step_counter / (self.spe * self.lr_sch_epoch))).astype('float32')
                 self.lr_sch = 0.5 * (1 + np.cos(np.pi * self.step_counter / (self.spe * self.lr_sch_epoch))).astype('float32')
 
                 if self.epoch_counter == self.lr_sch_epoch:
@@ -89,13 +88,14 @@ class Adam:
                 print(self.lr)
         else:
             # Computes the Adam update
-            # norm_ratio = 1 / (grad_norm + 0.0001)
-            norm_ratio = 1
+            # Gradient normalization factor
+            norm_ratio = 1 / (grad_norm + 0.0001)
+            # norm_ratio = 1
 
             self.m += (1 - self.beta1) * ((norm_ratio * self.W.grad) - self.m)
             self.v += (1 - self.beta2) * ((norm_ratio * self.W.grad) ** 2 - self.v)
             
-            # if self.counter > 2000:
+            # Updates after minimal number of steps
             if self.counter > self.upd_start:
                 self.adam_mult = (np.sqrt(1.0 - self.beta2**(self.counter-self.upd_start)) / (1.0 - self.beta1**(self.counter-self.upd_start))).astype('float32')
                 self.adam_grad = self.adam_mult * self.m / (self.xp.sqrt(self.v + 1e-15))

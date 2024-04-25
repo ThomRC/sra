@@ -19,7 +19,6 @@ import chainerx
 if cuda.cudnn_enabled:
     _cudnn_version = cuda.cuda.cudnn.getVersion()  # type: ignore
 
-
 def _pair(x):
     if hasattr(x, '__getitem__'):
         return x
@@ -33,7 +32,6 @@ def _matmul(a, b):
         # NumPy 1.9 does not support matmul. We use einsum instead.
         return xp.einsum('ijl,ilk->ijk', a, b)
     return xp.matmul(a, b)
-
 
 class Convolution2DFunction(function_node.FunctionNode):
 

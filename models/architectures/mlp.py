@@ -12,7 +12,8 @@ from chainer import Variable
 import models.losses as losses
 
 class FeedForwardNN(chainer.ChainList):
-    """ Class for feedforward multilayer perceptron that is a list containing in each element the sequence of operations (linear layer, activation, linear layer, ...)
+    """
+    Class for feedforward NN that is a list containing in each element the sequence of operations (conv. layer, activation, linear layer, activation,...)
     """
     def __init__(
             self,
@@ -102,7 +103,9 @@ class FeedForwardNN(chainer.ChainList):
             self.add_link(LinearLink(n_out, config = self.bjorck_config, **kwargs).to_gpu())
 
     def __call__(self, x, y = None, norm_out = False, train = False):
-        """ Carries the forward pass over each element of the NN object under the specified activation function"""
+        """
+        Carries the forward pass through each element of the NN object under the specified activation function
+        """
         h = x
         for link in range(len(self) - 1):
             if hasattr(self[link], 'W'):
@@ -114,12 +117,19 @@ class FeedForwardNN(chainer.ChainList):
         return h
 
     def ortho_iter_red(self):
+        """
+        Iterates through the layers of the model to reduce the number of iterations required for Bjorck orthonormalizations.
+
+        This method checks each layer for a weight matrix 'W' and dynamic iteration flag, then calls the 'iter_red' method to reduce iterations if conditions are met.
+        """        
         for link in range(len(self)):
             if hasattr(self[link], 'W') and self[link].dynamic_iter:
                 self[link].iter_red()
 
     def grad_norm(self):
-        """ Obtain the l2-norm of the gradient to be used in the update_net function to avoid exploding gradients"""
+        """
+        Obtain the l2-norm of the gradient to be used in the update_net function to avoid exploding gradients
+        """
         tot_grad = self.xp.array([])
         count = 0
         for link in self:
@@ -130,15 +140,18 @@ class FeedForwardNN(chainer.ChainList):
         return tot_grad_norm
 
     def update_net(self, epoch):
-        """ Updates the weights from each layer using the update function from each linear layer object"""
+        """
+        Updates the weights from each layer using the update function from each linear layer object
+        """
         tot_grad_norm = self.grad_norm()
-        # tot_grad_norm = 1
         for _, link in enumerate(self):
             if hasattr(link, 'W'):
                 link.update(epoch, tot_grad_norm)
 
     def noise_inj(self, x, sd, dist = 'Normal', radius = 0.3):
-        """ Obtains a noise sample of same dimension as input x to be injected in the input"""
+        """
+        Obtains a noise sample of same dimension as input x to be injected in the input
+        """
         if dist == 'Normal':
             x_noise = self.xp.random.standard_normal(x.shape).astype(self.xp.float32) * sd
         elif dist == 'Uniform':
@@ -146,7 +159,8 @@ class FeedForwardNN(chainer.ChainList):
         return x_noise
 
     def validation(self, x, target, noise_in = False, sd = 1., dist = 'Normal', train = True, ssnr = False, ssnr_ratio = None):
-        """ Function that returns the accuracy over the input array 'x' with targets 'target'
+        """
+        Function that returns the accuracy over the input array 'x' with targets 'target'
 
         Args:
             x: array of inputs subject to classification
@@ -158,8 +172,7 @@ class FeedForwardNN(chainer.ChainList):
             ssnr: boolean telling whether the input will be corrupted by a "gray" image
             ssnr_ratio: proportion of the input that is corrupted by the "gray" image
 
-        Returns:
-
+        Returns: scalar value with the accuracy
         """
         # Using no_backprop_mode method since it is just required to forward the input through the network, and not to build a computational graph to apply the backprop
         with no_backprop_mode():
@@ -204,7 +217,8 @@ class FeedForwardNN(chainer.ChainList):
             return F.accuracy(h, target).array
 
     def output_sampling(self, x, sd, samples = 100, dist='Normal', radius=0.3):
-        """ Obtains samples of the output layer for a single input
+        """ 
+        Obtains samples of the output layer for a single random input perturbation
 
         Args:
             x: array of inputs subject to classification
@@ -215,18 +229,13 @@ class FeedForwardNN(chainer.ChainList):
 
         Returns:
             (samples, n_classes) matrix
-
         """
         
         # Using no_backprop_mode method since it is just required to forward the input through the network, and not to build a computational graph to apply the backprop
         out = self.xp.zeros((samples, 10))
-        # x = x.array
-        # x = self.xp.expand_dims(x, 0)
         if len(x.shape) == 3:
             x = cp.repeat(cp.expand_dims(x.array,0), samples, 0)
-        # x_ext = self.xp.repeat(x.array, samples, -1)
         with no_backprop_mode():
-            # for i in range(samples):
             h = x + self.noise_inj(x, sd, dist, radius)
 
             for link in range(len(self) - 1):
@@ -236,12 +245,12 @@ class FeedForwardNN(chainer.ChainList):
                     h = self[link](h)
 
             h = self[link + 1](h)
-            # out[i,:] = h.array.squeeze()
             out = h.array
             return out
 
     def emp_prob(self, x, target, sd, samples = 100, dist = 'Normal', radius = 0.3):
-        """ Obtains a sample estimate of probability of correct classification
+        """
+        Obtains a sample estimate of probability of correct classification
 
         Args:
             x: array of inputs subject to classification
@@ -252,10 +261,9 @@ class FeedForwardNN(chainer.ChainList):
             radius: for the case of 'Uniform', radius is half the interval
 
         Returns: the fraction of samples correctly classified
-
         """
         with no_backprop_mode(): # Using no_backprop_mode method since it is just required to forward the input through the network, and not to build a computational graph to apply the backprop
-            count_vec = np.zeros(len(target)) # cp -> np
+            count_vec = np.zeros(len(target))
             for _ in range(samples):
                 noise = self.noise_inj(x, sd, dist, radius)
                 h = x + noise
@@ -274,7 +282,8 @@ class FeedForwardNN(chainer.ChainList):
             return count_vec/samples
 
     def sample_mean_margin(self, x, target, sd, samples = 100, dist='Normal', radius=0.3):
-        """ Obtains a sample estimate of the mean margin, i.e., the smoothed margin
+        """
+        Obtains a sample estimate of the mean margin, i.e., the smoothed margin
 
         Args:
             x: array of inputs subject to classification
@@ -287,7 +296,6 @@ class FeedForwardNN(chainer.ChainList):
         Returns:
             margin sample mean
             sample margin variance
-
         """
         # Using no_backprop_mode method since it is just required to forward the input through the network, and not to build a computational graph to apply the backprop
         target_cpu = cuda.to_cpu(target.array)
@@ -323,9 +331,11 @@ class FeedForwardNN(chainer.ChainList):
 
     def projected_gradient_descent(self, x, target, num_steps, step_size, step_norm, eps, eps_norm,
                                    clamp=(0,1), y_target=None, loss_func = 'crossentropy', x_var = 0, pert_scale = 1, cw_cut = 0):
-        """ Performs the projected gradient descent (PGD) attack on a batch of images
+        """
+        Performs the projected gradient descent (PGD) attack on a batch of images
         It carries the PGD attack given a specified number of steps, step norm, attack radius norm, and loss function. Other arguments are described bellow.
         The function accepts three different kinds of losses, but "CW" is the one used for all experiments from the paper
+        
         Args:
             x: array of inputs subject to classification
             target: array of target classes
@@ -342,7 +352,6 @@ class FeedForwardNN(chainer.ChainList):
             cw_cut: the cut to be used for the 'CW' loss
 
         Returns: a self.xp ndarray with same shape as the input containing the adversarial examples computed with PGD
-
         """
         import copy
         aux_shape = [x.shape[0]] # holds array that will contain the broadcasted ndarray with first dimension equals to the number of still correctly classified inputs
@@ -373,20 +382,15 @@ class FeedForwardNN(chainer.ChainList):
                     gradients = self.xp.sign(_x_adv.grad) * step_size
                 elif step_norm == 'inf':
                     ### Calculates the gradient for attacks with l_1 ball attacks
-                    # linf_norm_pos = np.linalg.norm(cuda.to_cpu(_x_adv.grad), ord = np.inf, axis = 1) > 0
                     linf_norm_pos = cp.linalg.norm(_x_adv.grad, ord = cp.inf, axis = 1) > 0
                     max_idx = _x_adv.grad.argmax(axis=1)
-                    # max_mat = cuda.to_cpu(self.xp.zeros_like(_x_adv.grad, dtype = 'bool'))
                     max_mat = cp.zeros_like(_x_adv.grad, dtype = 'bool')
-                    # max_mat[linf_norm_pos,cuda.to_cpu(max_idx[linf_norm_pos]).tolist()] = True
                     max_mat[linf_norm_pos,max_idx[linf_norm_pos].tolist()] = True
                     gradients = self.xp.clip(_x_adv.grad, a_min = -1, a_max = +1) ## projection to 1-radius l-inf ball
                     gradients[max_mat] = self.xp.sign(gradients[max_mat])  ## if inside the l-inf ball, projection onto the 1-radius l-inf sphere
                     gradients *=  step_size ## scale according to step size
                 elif step_norm == '2':
-                    ### Calculates the gradient for attacks with l_2 ball attacks
-                    # gradients = _x_adv.grad * step_size / _x_adv.grad.view(_x_adv.shape[0], -1).norm(step_norm, dim=-1).view(-1, num_channels, 1, 1)
-                    
+                    ### Calculates the gradient for attacks with l_2 ball attacks                    
                     grad_norm = self.xp.linalg.norm(_x_adv.grad.reshape((_x_adv.shape[0], -1)), ord = 2, axis = 1).reshape((-1, 1))
                     non_zero_idx = grad_norm != 0
                     indices = cp.arange(len(target)).reshape((-1,1))  # cp -> np
@@ -415,7 +419,8 @@ class FeedForwardNN(chainer.ChainList):
         return x_adv.array
 
     def moment_propagation(self, layer, x_m, x_var, w_grad = False, ortho_ws = True, clean_actv = False):
-        """ Carries the moment propagation
+        """
+        Carries the moment propagation
 
         Args:
             layer: the layer until which the moment propagation should be carried (in general the layer should be the output)
@@ -435,8 +440,6 @@ class FeedForwardNN(chainer.ChainList):
         h_clean = x_m.array
         h_v = self.xp.ones_like(x_m.array)*x_var
 
-        # for link in range(len(self) - 1):
-        # CHECK LATER if x_m can be changed to h_m to avoid the if
         for link in range(layer):
             if hasattr(self[link], 'W'):
                 if link == 0:

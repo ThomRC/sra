@@ -1,7 +1,8 @@
 from models.losses import *
 
 def select_loss_function(loss):
-    """ Function that returns the loss function to be used as well as what loss hyperparameters it needs (x_var and d)
+    """
+    Function that returns the loss function to be used as well as what loss hyperparameters it needs (x_var and d)
 
     Args:
         loss: string with the name of the loss to be used on training
@@ -10,7 +11,6 @@ def select_loss_function(loss):
         loss_func: loss function from the losses.py file
         smooth_loss: whether this loss requires input smoothing by adding isotropic Gaussian noise with parameter x_var
         margin_loss: whether this loss requires a maximum margin control parameter d
-
     """
     smooth_loss = False
     margin_loss = False

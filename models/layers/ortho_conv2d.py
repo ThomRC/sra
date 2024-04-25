@@ -6,7 +6,6 @@ Original work:
 Qiyang Li, Saminul Haque, Cem Anil, James Lucas, Roger Grosse, Jörn-Henrik Jacobsen. "Preventing Gradient Attenuation in Lipschitz Constrained Convolutional Networks"
 33rd Conference on Neural Information Processing Systems (NeurIPS 2019)
 """
-
 from chainer import link, variable, initializers
 import chainer.functions as F
 import numpy as np
@@ -20,12 +19,20 @@ from utils.bjorck_ortho import bjorck_orthonormalize, get_safe_bjorck_scaling, m
 from models.activations.relu_moments import relu_moments
 
 def orthogonal_matrix(n):
+    """
+    Generates an orthogonal matrix of size n.
+
+    This function creates a random matrix of size n by n, performs QR decomposition, and returns the orthogonal matrix component.
+    """    
     a = cp.random.randn(n, n)
     q, r = cp.linalg.qr(a)
     return q * cp.sign(cp.diag(r))
 
 def symmetric_projection(n, ortho_matrix, mask=None):
-    """Compute a n x n symmetric projection matrix.
+    """
+    Generates a symmetric projection matrix based on an orthogonal matrix and optional masking.
+
+    This function takes an orthogonal matrix, potentially applies a random masking operation, and computes the symmetric projection matrix.
     Args:
       n: Dimension.
     Returns:
@@ -36,11 +43,12 @@ def symmetric_projection(n, ortho_matrix, mask=None):
     if mask is None:
         mask = (cp.random.randn(n) > 0).float()
     c = q * mask
-    # return c.mm(c.t())
     return c @ c.T
 
 def block_orth(p1, p2):
-    """Construct a 2 x 2 kernel. Used to construct orthgonal kernel.
+    """
+    Construct a 2 x 2 kernel. Used to construct a orthogonal kernel.
+    
     Args:
       p1: A symmetric projection matrix.
       p2: A symmetric projection matrix.
@@ -58,7 +66,9 @@ def block_orth(p1, p2):
     return F.reshape(F.stack([aux, p1 - aux, p2 - aux, eye - p1 - p2 + aux]),(2,2,n,n))
 
 def matrix_conv(m1, m2):
-    """Matrix convolution.
+    """
+    Block matrix convolution.
+    
     Args:
       m1: A k x k dictionary, each element is a n x n matrix.
       m2: A l x l dictionary, each element is a n x n matrix.
@@ -87,6 +97,19 @@ def matrix_conv(m1, m2):
     return F.reshape(F.stack(result),(size,size,n,n))
 
 def convolution_orthogonal_generator_projs(ksize, cin, cout, ortho, sym_projs):
+    """
+    Block matrix convolution.
+    
+    Args:
+      ksize: Kernel size of orthogonal convolution
+      cin: Number of input channels of orthogonal convolution
+      cout: Number of output channels of orthogonal convolution
+      ortho: An orthogonal matrix that will turn the square matrices into rectangular ones with n_row < n_col
+      sym_projs: List with 2 * ksize symmetric projectors to build the BCOP layer
+    Returns:
+      A orthogonal convolutional layer
+
+    """    
     if cin < cout:
         ortho = cp.identity(cout)
     if ksize == 1:
@@ -99,10 +122,14 @@ def convolution_orthogonal_generator_projs(ksize, cin, cout, ortho, sym_projs):
     p = ortho.reshape(1,1,ortho.shape[0],ortho.shape[1]) @ p
     p = p[:, :, :, 0:cin]    
     p = einops.rearrange(p, 'k1 k2 cout cin -> cout cin k2 k1')
-
     return p
 
 class BCOP(link.Link, Adam):
+    """
+    Implements a Block Convolution Orthogonal Parameterization (BCOP) convolution layer.
+
+    This class defines a BCOP convolution layer with orthogonal matrix initialization, orthonormalization, and moment propagation functionalities.
+    """    
     def __init__(
         self,
         in_channels,

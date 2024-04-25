@@ -6,6 +6,21 @@ import numpy as np
 import cupy as cp
 
 def sample_mean_margin(network, val_in, target, sd, n, dist = 'Normal', radius = 0.3):
+    """
+    Computes the sample mean of the margin of a neural network output
+
+    Args:
+        network: The neural network model.
+        val_in: The input data.
+        target: The target labels.
+        sd: The standard deviation of noise injection.
+        n: The number of iterations.
+        dist: The distribution of noise (default is 'Normal', other is 'Uniform').
+        radius: The radius for noise injection in case of 'Uniform' (default is 0.3).
+
+    Returns:
+        Tuple of mean margin and margin variance estimate.
+    """
     # Using no_backprop_mode method since it is just required to forward the input through the network, and not to build a computational graph to apply the backprop
     with no_backprop_mode():
         margin_sum = network.model.xp.zeros(10000)
@@ -31,10 +46,23 @@ def sample_mean_margin(network, val_in, target, sd, n, dist = 'Normal', radius =
 
 def sampleundernoise(network, x, sd, times, dist = 'Normal', radius = 0.3):
     """
+    Computes the count vector of classification under noise for a neural network output.
+    
     Algorithm from:
     Jeremy Cohen, Elan Rosenfeld, J. Zico Kolter. "Certified Adversarial Robustness via Randomized Smoothing "
     Proceedings of the 36th International Conference on Machine Learning (2019)
-    """
+    
+    Args:
+        network: The neural network model.
+        x: The input data.
+        sd: The standard deviation of noise injection.
+        times: The number of iterations.
+        dist: The distribution of noise (default is 'Normal', other is 'Uniform').
+        radius: The radius for noise injection in case of 'Uniform' (default is 0.3).
+
+    Returns:
+        Vector representing the count of activations under noise.
+    """    
     # Using no_backprop_mode method since it is just required to forward the input through the network, and not to build a computational graph to apply the backprop
     n = 50000
     count_vec = network.model.xp.zeros(10)
@@ -57,10 +85,22 @@ def sampleundernoise(network, x, sd, times, dist = 'Normal', radius = 0.3):
 
 def predict(network, val_in, sd, n, alpha):
     """
+    Predicts the class labels based on count vector statistics and a significance level.
+    
     Algorithm from:
     Jeremy Cohen, Elan Rosenfeld, J. Zico Kolter. "Certified Adversarial Robustness via Randomized Smoothing "
     Proceedings of the 36th International Conference on Machine Learning (2019)
-    """
+    
+    Args:
+        network: The neural network model.
+        val_in: The input data.
+        sd: The standard deviation of noise injection.
+        n: The number of iterations for noise sampling.
+        alpha: The significance level for binomial test.
+
+    Returns:
+        Predicted class labels based on statistical tests.    
+    """    
     count_mat = cuda.to_cpu(sampleundernoise(network,val_in, sd, n))
     sort_count = np.argsort(count_mat,axis = 1)
     cA = sort_count[:,-1]
@@ -76,9 +116,21 @@ def predict(network, val_in, sd, n, alpha):
 
 def certify(network, x_in, sd, times, alpha):
     """
+    Certifies the Randomized Smoothing robustness of a neural network.
+
     Algorithm from:
     Jeremy Cohen, Elan Rosenfeld, J. Zico Kolter. "Certified Adversarial Robustness via Randomized Smoothing "
     Proceedings of the 36th International Conference on Machine Learning (2019)
+
+    Args:
+        network: The neural network model.
+        x_in: The input data.
+        sd: The standard deviation of noise injection.
+        times: The number of noise injection iterations.
+        alpha: The significance level for confidence interval.
+
+    Returns:
+        Tuple of certified class label and robustness radius.    
     """
     count_mat = cuda.to_cpu(sampleundernoise(network, x_in, sd, times))
     cA = np.argmax(count_mat)
@@ -93,7 +145,8 @@ def certify(network, x_in, sd, times, alpha):
     return cA, radius
 
 def cohen_cr(network, x, target):
-    """ Measures the randomized smoothing certified radius for given input noise std (used value of 0.125)
+    """
+    Measures the randomized smoothing certified radius for given input noise std (used value of 0.125)
     
     Certified radius formula from:
     Jeremy Cohen, Elan Rosenfeld, J. Zico Kolter. "Certified Adversarial Robustness via Randomized Smoothing "
@@ -105,7 +158,6 @@ def cohen_cr(network, x, target):
         target: correct class array
 
     Returns: accuracy under noise for each input variance
-
     """
     out_samples = cuda.to_cpu(network.model.output_sampling(x, 0, 1))
     class_out = np.argmax(out_samples, axis = 1)
@@ -127,7 +179,8 @@ def cohen_cr(network, x, target):
     return np.asarray(cr_arr)
 
 def convsv(kernel, input_shape): 
-    """ Computers the singular values of a convolutional layer
+    """
+    Computes the singular values of a convolutional layer
     
     Function extracted from:
     Hanie Sedghi, Vineet Gupta, Philip M. Long. "The singular values of convolutional layers"
@@ -138,6 +191,15 @@ def convsv(kernel, input_shape):
     return np.linalg.svd(transforms, compute_uv=False)
 
 def lipconstant(network):
+    """
+    Calculates the Lipschitz constant of a neural network.
+
+    Args:
+        network: The neural network model.
+
+    Returns:
+        Lipschitz constant of the neural network.
+    """    
     lip_net = 1
     for link in range(len(network.model)):
         if hasattr(network.model[link], 'W'):
@@ -154,16 +216,19 @@ def lipconstant(network):
     return lip_net
 
 def lip_cr(network, x, target):
-    """ Measures the accuracy under Gaussian noise with with gradual increments of noise variance until average accuracy reaches 1/c, where c is the number of output classes
+    """
+    Calculates the Lipschitz-margin certified radius (CR) for a given network and input.
+
+    This function computes the CR based on the Lipschitz constant of the network, the model's logits for the input, and the target class.
 
     Args:
-        network: NNAgent object containing the model subject to the pertubation
-        x: input that will be perturbed
-        target: correct class array
+        network: The neural network model.
+        x: The input data.
+        target: The target class for which the CR is calculated.
 
-    Returns: accuracy under noise for each input variance
-
-    """
+    Returns:
+        cr: The certified radius for the given network, input, and target class.
+    """    
     lip_cst = lipconstant(network)
     logits = network.model(x, train = False)
     idx_aux = cp.arange(len(target))

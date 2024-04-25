@@ -2,16 +2,16 @@ import cupy as cp
 import numpy as np
 
 def ssnr_eval_acc(network, x, target):
-    """ Measures the accuracy after combining the input image with a "gray" image (all pixels with same value) from clean image (ssnr_ratio = 1.0) to completely corrupted image (ssnr_ratio = 0.0)
+    """
+    Measures the accuracy after combining the input image with a "gray" image (all pixels with same value) from clean image (ssnr_ratio = 1.0) to completely corrupted image (ssnr_ratio = 0.0)
     (SSNR = signal-to-signal-plu-noise ratio)
 
     Args:
-        network: NNAgent object containing the model subject to the pertubation
+        network: NNAgent object containing the model subject to the perturbation
         x: input that will be perturbed
         target: correct class array
 
     Returns: accuracy under SSNR corruption for different SSNR ratios
-
     """
     noise_acc = []
     samples = 10

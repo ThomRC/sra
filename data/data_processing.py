@@ -5,7 +5,18 @@ from chainer import cuda, datasets
 from sklearn.datasets import fetch_openml
 
 def normalize(x, axis):
-    """ Function to normalize the image dataset. Each pixel is subtracted by the same pixel mean and divided by the standard deviation"""
+    """
+    Normalizes the input data along a specified axis.
+
+    This function calculates the normalized data by subtracting each pixel by the mean and dividing by the standard deviation.
+
+    Args:
+        x: The input data to be normalized.
+        axis: The axis for different samples.
+
+    Returns:
+        norm_x: The normalized data along the specified axis.
+    """    
     x_m = cp.mean(x, axis = axis)
     x_std = cp.std(x, axis = axis)
     if axis == 0:
@@ -17,7 +28,8 @@ def normalize(x, axis):
     return norm_x
 
 def mnist_preprocessing(train_data = 60000, test_data = 10000, intvl_data = 2., in_center = 1., tr_idx = None, te_idx = None, norm = False, arch = 'mlp'):
-    """ Initializes the MNIST dataset
+    """ 
+    Initializes the MNIST dataset
 
     Args:
         train_data: size of training data to be used (<= 60000)
@@ -36,7 +48,6 @@ def mnist_preprocessing(train_data = 60000, test_data = 10000, intvl_data = 2., 
         test output
         indices of training data
         indices of test data
-
     """
     # Goes to sra folder
     dataset_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
@@ -88,7 +99,8 @@ def mnist_preprocessing(train_data = 60000, test_data = 10000, intvl_data = 2., 
     return tr_x,te_x,tr_y,te_y, tr_idx, te_idx
 
 def cifar10_preprocessing(train_data = 50000, test_data = 10000, intvl_data = 4., in_center = 0., tr_idx = None, norm = False, arch = 'mlp'):
-    """ Initializes the Cifar 10 dataset
+    """
+    Initializes the Cifar-10 dataset
 
     Args:
         train_data: size of training data to be used (<= 60000)
@@ -107,7 +119,6 @@ def cifar10_preprocessing(train_data = 50000, test_data = 10000, intvl_data = 4.
         test output
         indices of training data
         indices of test data
-
     """
     train_data = np.minimum(50000, train_data)
     dataset_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))
@@ -166,7 +177,8 @@ def cifar10_preprocessing(train_data = 50000, test_data = 10000, intvl_data = 4.
     return tr_x,te_x,tr_y,te_y, tr_idx, te_idx
 
 def cifar100_preprocessing(train_data = 50000, test_data = 10000, intvl_data = 4., in_center = 0., tr_idx = None, norm = False, arch = 'mlp'):
-    """ Initializes the Cifar 100 dataset
+    """
+    Initializes the Cifar-100 dataset
 
     Args:
         train_data: size of training data to be used (<= 60000)
@@ -185,7 +197,6 @@ def cifar100_preprocessing(train_data = 50000, test_data = 10000, intvl_data = 4
         test output
         indices of training data
         indices of test data
-
     """
     train_data = np.minimum(50000, train_data)
     dataset_dir, curr_fold = os.path.split(os.path.dirname(os.path.realpath(__file__)))

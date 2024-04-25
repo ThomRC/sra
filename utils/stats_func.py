@@ -6,15 +6,15 @@ import scipy.special as special
 import numpy as np
 np.random.seed(0)
 
-""" Functions required to obtain the probability of correct classification and 
-                                expected margin through numerical integrations """
+""" Functions required to obtain the probability of correct classification and expected margin through numerical integrations """
 
 def corr_prob_func(x, mean, var, mean_c, var_c):
     """ Function to calculate the classification probability by numerical integration  """
     return np.prod((1/2)*(1 + special.erf((x - mean)/np.sqrt(2 * var)))) * np.exp(-(x - mean_c)**2/(2*var_c))/np.sqrt(2 * np.pi * var_c)
 
 def mean_max_notc_func(x, mean, var, index = 0):
-    """ Function to calculate the mean max output channel other than the correct output by numerical integration
+    """
+    Function to calculate the mean max output channel other than the correct output by numerical integration
     Required to calculate the smoothed margin
     """
 

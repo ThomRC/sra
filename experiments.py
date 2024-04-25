@@ -7,11 +7,10 @@ import sys
 import os
 import datetime
 import pickle
-import io
 import re
 import code
 
-from chainer import Variable, initializers
+from chainer import Variable
 import cupy as cp
 
 from exp_settings import settings
@@ -39,24 +38,13 @@ def change_gpu(model, gpu):
 
 class RenameUnpickler(pickle.Unpickler):
     def find_class(self, module, name):
-        renamed_module = module
-        return super(RenameUnpickler, self).find_class(renamed_module, name)
-
-class RenameUnpickler2(pickle.Unpickler):
-    def find_class(self, module, name):
-        renamed_module = module
-        if module == "BNN_mod_bu":
-            renamed_module = "BNN_mod_normal"
-        return super(RenameUnpickler2, self).find_class(renamed_module, name)
+        return super(RenameUnpickler, self).find_class(module, name)
 
 def renamed_load(file_obj):
     return RenameUnpickler(file_obj).load()
 
-def renamed_loads(pickled_bytes):
-    file_obj = io.BytesIO(pickled_bytes)
-    return renamed_load(file_obj)
-
 def unpickle(file):
+    """ Function to unpickle the trained NNs """
     with open(file, 'rb') as fo:
         dict = renamed_load(fo)
     return dict
@@ -96,12 +84,13 @@ def experiment_routine(**kwargs):
     while success < n_exp:
         # Sets the name of the destination folder for current training with the main training settings
         exp_name = "loss_{}_ep_{}_lr_{}_x_var_{}_d_{}_{}".format(kwargs['loss'], kwargs['n_epoch'], kwargs['lr'], kwargs['x_var'], kwargs['d'], j)
-        # Changes the number tag of destination folder until a number that wasn'target used
+        # Changes the number tag of destination folder until a number that wasn't used
         while os.path.exists(dest_dir + exp_name):
             j += 1
             exp_name = "loss_{}_ep_{}_lr_{}_x_var_{}_d_{}_{}".format(kwargs['loss'], kwargs['n_epoch'], kwargs['lr'],  kwargs['x_var'], kwargs['d'], j)
 
         data_save_dir = dest_dir + exp_name
+        # Creates folder where the training data will be saved
         os.makedirs(data_save_dir)
 
         kwargs_train = {'exp_count': success + fail, 'success': success, 'data_save_dir': data_save_dir}
@@ -122,8 +111,8 @@ def experiment_routine(**kwargs):
     return kwargs
 
 def build_net(**kwargs):
-    """Builds a base agent that will be used to load the trained NN
-    Make sure that all the architecture settings match
+    """ Builds a base agent that will be used to load the trained NN
+    Please make sure that all the architecture settings match
     """
     network = trainer.NNAgent(**kwargs)
     network.prepare_data(**kwargs)
@@ -145,13 +134,13 @@ if __name__ == '__main__':
         d = cp.asarray(float(sys.argv[2]), dtype=cp.float32)
         x_var = cp.asarray(float(sys.argv[3]), dtype=cp.float32)
         mode = sys.argv[4].lower()
-        
+
     if mode not in {'train', 'load', 'load_all', 'interact'}:
         raise RuntimeError('Mode should be \'train\', \'load\', \'load_all\' or \'interact\'. You entered {mode} \n'
                            'train: carries out training given settings in exp_settings.py file\n'
                            'load: loads and carries out measurements of trained nets with architecture defined in exp_settings.py AND loss and hyperparameters given as arguments\n'
                            'load_all: loads and carries out measurements of all trained nets with architecture defined in exp_settings.py\n')
-        
+
     input_params = {'loss': loss, 'd': d, 'x_var': x_var, 'gpu': gpu}
     
     while True:
