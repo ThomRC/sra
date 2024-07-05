@@ -1,5 +1,6 @@
 # SRA
- Code from "Smoothed Robustness Analysis" paper
+ Code used in experiments from 
+ Crespo, T.R. and Teramae, J. (2024) "Smoothed Robustness Analysis: Bridging worst- and average-case robustness analyses via smoothed analysis". URL: https://openreview.net/forum?id=BogwFMz5tU
 
 # Basic requirements
 
